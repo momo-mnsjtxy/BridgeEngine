@@ -1,8 +1,8 @@
 ifeq ($(OS),Windows_NT)
     ifndef VCPKG_ROOT
-        VCPKG_FROM_PATH := $(shell where vcpkg 2>nul)
+        VCPKG_FROM_PATH := $(shell where.exe vcpkg)
         ifneq ($(VCPKG_FROM_PATH),)
-            VCPKG_ROOT := $(shell dirname "$(VCPKG_FROM_PATH)" 2>nul)
+            VCPKG_ROOT := $(shell ./x_dirname.bat "$(VCPKG_FROM_PATH)")
         endif
     endif
     ifndef VCPKG_ROOT
