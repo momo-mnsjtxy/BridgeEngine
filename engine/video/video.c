@@ -14,6 +14,8 @@
 
 extern SDL_Renderer* bapi_internal_renderer;
 
+#define VIDEO_AUDIO_BYTES_PER_SAMPLE ((int)sizeof(float) * 2)
+
 struct bapi_video_internal {
     AVFormatContext* format_ctx;
     AVCodecContext* codec_ctx;
@@ -29,6 +31,9 @@ struct bapi_video_internal {
     
     SDL_Texture* texture;
     SDL_AudioStream* audio_stream;
+    AVFrame* audio_frame;
+    Uint8* audio_buffer;
+    int audio_buffer_size;
     
     int video_stream_idx;
     int audio_stream_idx;
@@ -49,6 +54,92 @@ struct bapi_video_internal {
 };
 
 static bapi_video_t g_current_video = NULL;
+
+static void reset_audio_playback(bapi_video_t video) {
+    if (video->audio_stream) {
+        SDL_ClearAudioStream(video->audio_stream);
+    }
+    if (video->audio_ctx) {
+        avcodec_flush_buffers(video->audio_ctx);
+    }
+    if (video->swr_ctx) {
+        swr_close(video->swr_ctx);
+        swr_init(video->swr_ctx);
+    }
+}
+
+static int queue_audio_frame(bapi_video_t video, AVFrame* frame) {
+    int out_samples = av_rescale_rnd(
+        swr_get_delay(video->swr_ctx, video->audio_ctx->sample_rate) + frame->nb_samples,
+        44100,
+        video->audio_ctx->sample_rate,
+        AV_ROUND_UP
+    );
+    int required_size = av_samples_get_buffer_size(NULL, 2, out_samples, AV_SAMPLE_FMT_FLT, 0);
+    if (required_size < 0) {
+        printf("[VIDEO] Failed to compute audio buffer size\n");
+        return -1;
+    }
+
+    if (required_size > video->audio_buffer_size) {
+        Uint8* resized = av_realloc(video->audio_buffer, required_size);
+        if (resized == NULL) {
+            printf("[VIDEO] Failed to allocate audio buffer\n");
+            return -1;
+        }
+        video->audio_buffer = resized;
+        video->audio_buffer_size = required_size;
+    }
+
+    Uint8* output[] = {video->audio_buffer, NULL};
+    int converted_samples = swr_convert(video->swr_ctx, output, out_samples, (const uint8_t* const*)frame->extended_data, frame->nb_samples);
+    if (converted_samples < 0) {
+        printf("[VIDEO] Failed to resample audio frame\n");
+        return -1;
+    }
+
+    int output_size = converted_samples * VIDEO_AUDIO_BYTES_PER_SAMPLE;
+    if (output_size <= 0) {
+        return 0;
+    }
+
+    if (video->volume < 0.99f) {
+        float* samples = (float*)video->audio_buffer;
+        int sample_count = output_size / (int)sizeof(float);
+        for (int i = 0; i < sample_count; ++i) {
+            samples[i] *= video->volume;
+        }
+    }
+
+    if (!SDL_PutAudioStreamData(video->audio_stream, video->audio_buffer, output_size)) {
+        printf("[VIDEO] Failed to queue audio data: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    if (!SDL_FlushAudioStream(video->audio_stream)) {
+        printf("[VIDEO] Failed to flush audio stream: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    return 0;
+}
+
+static int decode_audio_packet(bapi_video_t video) {
+    int ret = avcodec_send_packet(video->audio_ctx, video->packet);
+    if (ret < 0) {
+        return ret;
+    }
+
+    while ((ret = avcodec_receive_frame(video->audio_ctx, video->audio_frame)) >= 0) {
+        if (queue_audio_frame(video, video->audio_frame) < 0) {
+            av_frame_unref(video->audio_frame);
+            return -1;
+        }
+        av_frame_unref(video->audio_frame);
+    }
+
+    return ret == AVERROR(EAGAIN) || ret == AVERROR_EOF ? 0 : ret;
+}
 
 static int init_audio_decoder(bapi_video_t video) {
     if (video->audio_stream_idx < 0) {
@@ -103,9 +194,23 @@ static int init_audio_decoder(bapi_video_t video) {
     spec.freq = 44100;
     
     video->audio_stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, NULL, NULL);
-    if (video->audio_stream) {
-        SDL_ResumeAudioStreamDevice(video->audio_stream);
+    if (!video->audio_stream) {
+        swr_free(&video->swr_ctx);
+        avcodec_free_context(&video->audio_ctx);
+        printf("[VIDEO] Failed to open audio device: %s\n", SDL_GetError());
+        return -1;
     }
+
+    video->audio_frame = av_frame_alloc();
+    if (!video->audio_frame) {
+        SDL_DestroyAudioStream(video->audio_stream);
+        video->audio_stream = NULL;
+        swr_free(&video->swr_ctx);
+        avcodec_free_context(&video->audio_ctx);
+        return -1;
+    }
+
+    SDL_ResumeAudioStreamDevice(video->audio_stream);
 
     return 0;
 }
@@ -283,7 +388,9 @@ bapi_video_t bapi_video_load(const char* filepath) {
         goto cleanup_error;
     }
     
-    init_audio_decoder(video);
+    if (init_audio_decoder(video) < 0) {
+        printf("[VIDEO] Warning: audio track disabled for %s\n", filepath);
+    }
     
     printf("[VIDEO] Loaded: %s (%dx%d @ %.2f fps, duration: %.2fs)\n", 
            filepath, video->width, video->height, video->fps, video->duration);
@@ -313,6 +420,9 @@ void bapi_video_free(bapi_video_t video) {
     
     if (video->audio_stream) {
         SDL_DestroyAudioStream(video->audio_stream);
+    }
+    if (video->audio_frame) {
+        av_frame_free(&video->audio_frame);
     }
     if (video->swr_ctx) {
         swr_free(&video->swr_ctx);
@@ -346,6 +456,9 @@ void bapi_video_free(bapi_video_t video) {
     }
     if (video->audio_ctx) {
         avcodec_free_context(&video->audio_ctx);
+    }
+    if (video->audio_buffer) {
+        av_free(video->audio_buffer);
     }
     
     free(video);
@@ -385,6 +498,11 @@ static int decode_video_frame(bapi_video_t video) {
                 av_packet_unref(video->packet);
                 return 0;
             }
+        } else if (video->audio_ctx != NULL && video->packet->stream_index == video->audio_stream_idx) {
+            if (decode_audio_packet(video) < 0) {
+                av_packet_unref(video->packet);
+                return -1;
+            }
         }
         av_packet_unref(video->packet);
     }
@@ -400,6 +518,7 @@ int bapi_video_play(bapi_video_t video) {
     if (!video->playing) {
         av_seek_frame(video->format_ctx, video->video_stream_idx, 0, AVSEEK_FLAG_BACKWARD);
         avcodec_flush_buffers(video->codec_ctx);
+        reset_audio_playback(video);
         video->current_time = 0;
     }
     
@@ -432,6 +551,9 @@ void bapi_video_stop(bapi_video_t video) {
     
     if (video->audio_stream) {
         SDL_ClearAudioStream(video->audio_stream);
+    }
+    if (video->audio_ctx) {
+        avcodec_flush_buffers(video->audio_ctx);
     }
     
     if (g_current_video == video) {
@@ -558,6 +680,7 @@ void bapi_video_update(void) {
         if (video->loop) {
             av_seek_frame(video->format_ctx, video->video_stream_idx, 0, AVSEEK_FLAG_BACKWARD);
             avcodec_flush_buffers(video->codec_ctx);
+            reset_audio_playback(video);
             video->current_time = 0;
             decode_video_frame(video);
         } else {
