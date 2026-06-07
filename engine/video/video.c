@@ -37,6 +37,9 @@ struct bapi_video_internal {
     
     int video_stream_idx;
     int audio_stream_idx;
+    int source_width;
+    int source_height;
+    enum AVPixelFormat source_pix_fmt;
     int width;
     int height;
     double fps;
@@ -48,7 +51,8 @@ struct bapi_video_internal {
     float volume;
     double current_time;
     double duration;
-    
+    int demux_eof;
+
     char* filepath;
     Uint32 last_update;
 };
@@ -66,6 +70,168 @@ static void reset_audio_playback(bapi_video_t video) {
         swr_close(video->swr_ctx);
         swr_init(video->swr_ctx);
     }
+}
+
+static void reset_video_playback_state(bapi_video_t video) {
+    video->demux_eof = 0;
+    avcodec_flush_buffers(video->codec_ctx);
+    if (video->audio_ctx) {
+        avcodec_flush_buffers(video->audio_ctx);
+    }
+    reset_audio_playback(video);
+}
+
+static int ensure_video_output(bapi_video_t video, int width, int height) {
+    if (width <= 0 || height <= 0) {
+        return -1;
+    }
+
+    if (video->texture != NULL && video->buffer != NULL && video->width == width && video->height == height) {
+        return 0;
+    }
+
+    int buffer_size = av_image_get_buffer_size(AV_PIX_FMT_BGRA, width, height, 1);
+    if (buffer_size < 0) {
+        return -1;
+    }
+
+    uint8_t* buffer = av_malloc((size_t)buffer_size);
+    if (buffer == NULL) {
+        return -1;
+    }
+
+    int fill_result = av_image_fill_arrays(
+        video->frame_rgb->data,
+        video->frame_rgb->linesize,
+        buffer,
+        AV_PIX_FMT_BGRA,
+        width,
+        height,
+        1
+    );
+    if (fill_result < 0) {
+        av_free(buffer);
+        return -1;
+    }
+
+    SDL_Texture* texture = video->texture;
+    if (texture == NULL || video->width != width || video->height != height) {
+        texture = SDL_CreateTexture(
+            bapi_internal_renderer,
+            SDL_PIXELFORMAT_ARGB8888,
+            SDL_TEXTUREACCESS_STREAMING,
+            width,
+            height
+        );
+        if (!texture) {
+            av_free(buffer);
+            return -1;
+        }
+    }
+
+    if (texture != video->texture && video->texture != NULL) {
+        SDL_DestroyTexture(video->texture);
+    }
+    if (video->buffer != NULL) {
+        av_free(video->buffer);
+    }
+
+    video->buffer = buffer;
+    video->buffer_size = buffer_size;
+    video->texture = texture;
+    video->width = width;
+    video->height = height;
+    video->frame_rgb->format = AV_PIX_FMT_BGRA;
+    video->frame_rgb->width = width;
+    video->frame_rgb->height = height;
+
+    return 0;
+}
+
+static int ensure_sws_context(bapi_video_t video, const AVFrame* frame) {
+    enum AVPixelFormat frame_format = (enum AVPixelFormat)frame->format;
+
+    if (frame_format == AV_PIX_FMT_NONE || frame->width <= 0 || frame->height <= 0) {
+        return -1;
+    }
+
+    if (video->sws_ctx != NULL &&
+        video->source_width == frame->width &&
+        video->source_height == frame->height &&
+        video->source_pix_fmt == frame_format) {
+        return 0;
+    }
+
+    if (video->sws_ctx != NULL) {
+        sws_freeContext(video->sws_ctx);
+        video->sws_ctx = NULL;
+    }
+
+    video->sws_ctx = sws_getContext(
+        frame->width,
+        frame->height,
+        frame_format,
+        frame->width,
+        frame->height,
+        AV_PIX_FMT_BGRA,
+        SWS_BILINEAR,
+        NULL,
+        NULL,
+        NULL
+    );
+    if (video->sws_ctx == NULL) {
+        return -1;
+    }
+
+    video->source_width = frame->width;
+    video->source_height = frame->height;
+    video->source_pix_fmt = frame_format;
+    return 0;
+}
+
+static int present_video_frame(bapi_video_t video, AVFrame* frame) {
+    if (ensure_video_output(video, frame->width, frame->height) < 0) {
+        printf("[VIDEO] Error: Failed to prepare output surface\n");
+        return -1;
+    }
+
+    if (ensure_sws_context(video, frame) < 0) {
+        printf("[VIDEO] Error: Failed to create sws context\n");
+        return -1;
+    }
+
+    int scaled_height = sws_scale(
+        video->sws_ctx,
+        (const uint8_t* const*)frame->data,
+        frame->linesize,
+        0,
+        frame->height,
+        video->frame_rgb->data,
+        video->frame_rgb->linesize
+    );
+    if (scaled_height <= 0) {
+        printf("[VIDEO] Error: Failed to scale video frame\n");
+        return -1;
+    }
+
+    int64_t timestamp = frame->best_effort_timestamp;
+    if (timestamp == AV_NOPTS_VALUE) {
+        timestamp = frame->pts;
+    }
+    if (timestamp != AV_NOPTS_VALUE) {
+        video->current_time = timestamp * video->time_base;
+    }
+
+    if (!SDL_UpdateTexture(
+            video->texture,
+            NULL,
+            video->frame_rgb->data[0],
+            video->frame_rgb->linesize[0])) {
+        printf("[VIDEO] Error: Failed to update texture: %s\n", SDL_GetError());
+        return -1;
+    }
+
+    return 0;
 }
 
 static int queue_audio_frame(bapi_video_t video, AVFrame* frame) {
@@ -167,21 +333,32 @@ static int init_audio_decoder(bapi_video_t video) {
         return -1;
     }
     
-    video->swr_ctx = swr_alloc();
-    if (!video->swr_ctx) {
+    AVChannelLayout input_layout = {0};
+    AVChannelLayout output_layout = AV_CHANNEL_LAYOUT_STEREO;
+
+    if (av_channel_layout_copy(&input_layout, &video->audio_ctx->ch_layout) < 0 || input_layout.nb_channels <= 0) {
+        av_channel_layout_uninit(&input_layout);
+        av_channel_layout_default(&input_layout, 2);
+    }
+
+    if (swr_alloc_set_opts2(
+            &video->swr_ctx,
+            &output_layout,
+            AV_SAMPLE_FMT_FLT,
+            44100,
+            &input_layout,
+            video->audio_ctx->sample_fmt,
+            video->audio_ctx->sample_rate,
+            0,
+            NULL) < 0) {
+        av_channel_layout_uninit(&input_layout);
         avcodec_free_context(&video->audio_ctx);
         return -1;
     }
-    
-    av_opt_set_int(video->swr_ctx, "in_channel_layout", video->audio_ctx->ch_layout.u.mask ? video->audio_ctx->ch_layout.u.mask : AV_CH_LAYOUT_STEREO, 0);
-    av_opt_set_int(video->swr_ctx, "in_sample_rate", video->audio_ctx->sample_rate, 0);
-    av_opt_set_sample_fmt(video->swr_ctx, "in_sample_fmt", video->audio_ctx->sample_fmt, 0);
-    
-    av_opt_set_int(video->swr_ctx, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);
-    av_opt_set_int(video->swr_ctx, "out_sample_rate", 44100, 0);
-    av_opt_set_sample_fmt(video->swr_ctx, "out_sample_fmt", AV_SAMPLE_FMT_FLT, 0);
-    
-    if (swr_init(video->swr_ctx) < 0) {
+
+    av_channel_layout_uninit(&input_layout);
+
+    if (!video->swr_ctx || swr_init(video->swr_ctx) < 0) {
         swr_free(&video->swr_ctx);
         avcodec_free_context(&video->audio_ctx);
         return -1;
@@ -250,6 +427,7 @@ bapi_video_t bapi_video_load(const char* filepath) {
     video->paused = 0;
     video->video_stream_idx = -1;
     video->audio_stream_idx = -1;
+    video->source_pix_fmt = AV_PIX_FMT_NONE;
     
     if (avformat_open_input(&video->format_ctx, filepath, NULL, NULL) != 0) {
         printf("[VIDEO] Error: Cannot open video file %s\n", filepath);
@@ -320,18 +498,12 @@ bapi_video_t bapi_video_load(const char* filepath) {
         return NULL;
     }
     
-    video->width = video->video_stream->codecpar->width;
-    video->height = video->video_stream->codecpar->height;
     video->time_base = av_q2d(video->video_stream->time_base);
     video->duration = (double)video->format_ctx->duration / AV_TIME_BASE;
 
-    if (video->width <= 0 || video->height <= 0) {
-        printf("[VIDEO] Error: Invalid video dimensions %dx%d\n", video->width, video->height);
-        goto cleanup_error;
-    }
-    
-    if (video->video_stream->avg_frame_rate.den != 0) {
-        video->fps = av_q2d(video->video_stream->avg_frame_rate);
+    AVRational frame_rate = av_guess_frame_rate(video->format_ctx, video->video_stream, NULL);
+    if (frame_rate.num > 0 && frame_rate.den > 0) {
+        video->fps = av_q2d(frame_rate);
     } else {
         video->fps = 30.0;
     }
@@ -340,45 +512,6 @@ bapi_video_t bapi_video_load(const char* filepath) {
     video->frame_rgb = av_frame_alloc();
     if (!video->frame || !video->frame_rgb) {
         printf("[VIDEO] Error: Failed to allocate frames\n");
-        goto cleanup_error;
-    }
-    
-    video->buffer_size = av_image_get_buffer_size(AV_PIX_FMT_BGRA, video->width, video->height, 1);
-    video->buffer = av_malloc(video->buffer_size * sizeof(uint8_t));
-    if (!video->buffer) {
-        printf("[VIDEO] Error: Failed to allocate buffer\n");
-        goto cleanup_error;
-    }
-    
-    av_image_fill_arrays(video->frame_rgb->data, video->frame_rgb->linesize, video->buffer, AV_PIX_FMT_BGRA, video->width, video->height, 1);
-
-    if (video->codec_ctx->pix_fmt == AV_PIX_FMT_NONE) {
-        video->codec_ctx->pix_fmt = video->video_stream->codecpar->format;
-    }
-
-    video->sws_ctx = sws_getContext(
-        video->codec_ctx->width,
-        video->codec_ctx->height,
-        video->codec_ctx->pix_fmt,
-        video->width,
-        video->height,
-        AV_PIX_FMT_BGRA,
-        SWS_BILINEAR, NULL, NULL, NULL
-    );
-    if (!video->sws_ctx) {
-        printf("[VIDEO] Error: Failed to create sws context\n");
-        goto cleanup_error;
-    }
-    
-    video->texture = SDL_CreateTexture(
-        bapi_internal_renderer,
-        SDL_PIXELFORMAT_ARGB8888,
-        SDL_TEXTUREACCESS_STREAMING,
-        video->width,
-        video->height
-    );
-    if (!video->texture) {
-        printf("[VIDEO] Error: Failed to create texture: %s\n", SDL_GetError());
         goto cleanup_error;
     }
     
@@ -465,49 +598,52 @@ void bapi_video_free(bapi_video_t video) {
 }
 
 static int decode_video_frame(bapi_video_t video) {
-    int ret;
-    
-    while ((ret = av_read_frame(video->format_ctx, video->packet)) >= 0) {
-        if (video->packet->stream_index == video->video_stream_idx) {
-            ret = avcodec_send_packet(video->codec_ctx, video->packet);
+    while (1) {
+        int ret = avcodec_receive_frame(video->codec_ctx, video->frame);
+        if (ret == 0) {
+            int present_result = present_video_frame(video, video->frame);
+            av_frame_unref(video->frame);
+            return present_result;
+        }
+        if (ret != AVERROR(EAGAIN)) {
+            return ret == AVERROR_EOF ? -1 : ret;
+        }
+
+        if (!video->demux_eof) {
+            ret = av_read_frame(video->format_ctx, video->packet);
             if (ret < 0) {
-                av_packet_unref(video->packet);
+                video->demux_eof = 1;
+                avcodec_send_packet(video->codec_ctx, NULL);
+                if (video->audio_ctx) {
+                    avcodec_send_packet(video->audio_ctx, NULL);
+                }
                 continue;
             }
-            
-            ret = avcodec_receive_frame(video->codec_ctx, video->frame);
-            if (ret == 0) {
-                sws_scale(
-                    video->sws_ctx,
-                    (const uint8_t* const*)video->frame->data,
-                    video->frame->linesize,
-                    0, video->codec_ctx->height,
-                    video->frame_rgb->data,
-                    video->frame_rgb->linesize
-                );
-                
-                video->current_time = video->frame->pts * video->time_base;
-                
-                SDL_UpdateTexture(
-                    video->texture,
-                    NULL,
-                    video->frame_rgb->data[0],
-                    video->frame_rgb->linesize[0]
-                );
-                
+
+            if (video->packet->stream_index == video->video_stream_idx) {
+                ret = avcodec_send_packet(video->codec_ctx, video->packet);
                 av_packet_unref(video->packet);
-                return 0;
+                if (ret < 0 && ret != AVERROR(EAGAIN)) {
+                    return ret;
+                }
+                continue;
             }
-        } else if (video->audio_ctx != NULL && video->packet->stream_index == video->audio_stream_idx) {
-            if (decode_audio_packet(video) < 0) {
+
+            if (video->audio_ctx != NULL && video->packet->stream_index == video->audio_stream_idx) {
+                ret = decode_audio_packet(video);
                 av_packet_unref(video->packet);
-                return -1;
+                if (ret < 0) {
+                    return ret;
+                }
+                continue;
             }
+
+            av_packet_unref(video->packet);
+            continue;
         }
-        av_packet_unref(video->packet);
+
+        return -1;
     }
-    
-    return -1;
 }
 
 int bapi_video_play(bapi_video_t video) {
@@ -517,8 +653,7 @@ int bapi_video_play(bapi_video_t video) {
     
     if (!video->playing) {
         av_seek_frame(video->format_ctx, video->video_stream_idx, 0, AVSEEK_FLAG_BACKWARD);
-        avcodec_flush_buffers(video->codec_ctx);
-        reset_audio_playback(video);
+        reset_video_playback_state(video);
         video->current_time = 0;
     }
     
@@ -555,6 +690,7 @@ void bapi_video_stop(bapi_video_t video) {
     if (video->audio_ctx) {
         avcodec_flush_buffers(video->audio_ctx);
     }
+    video->demux_eof = 0;
     
     if (g_current_video == video) {
         g_current_video = NULL;
@@ -679,8 +815,7 @@ void bapi_video_update(void) {
     if (decode_video_frame(video) < 0) {
         if (video->loop) {
             av_seek_frame(video->format_ctx, video->video_stream_idx, 0, AVSEEK_FLAG_BACKWARD);
-            avcodec_flush_buffers(video->codec_ctx);
-            reset_audio_playback(video);
+            reset_video_playback_state(video);
             video->current_time = 0;
             decode_video_frame(video);
         } else {
