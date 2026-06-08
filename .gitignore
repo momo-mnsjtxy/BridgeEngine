@@ -27,7 +27,8 @@ x86/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
-[Bb]in/
+!XJ380_XACT_2026v4_xj380/
+!XJ380_XACT_2026v4_xj380/**/*
 [Oo]bj/
 [Oo]ut/
 *.log
@@ -205,10 +206,12 @@ PublishScripts/
 # NuGet v3's project.json files produces more ignorable files
 *.nuget.props
 *.nuget.targets
-
+*.epf
 # Microsoft Azure Build Output
 csx/
 *.build.csdef
+!XJ380_XACT_2026v4_xj380/
+!XJ380_XACT_2026v4_xj380/**/*
 
 # Microsoft Azure Emulator
 ecf/
@@ -372,11 +375,13 @@ compile_commands.json
 .idea
 
 *.o
+!XJ380_XACT_2026v4_xj380/**/*.o
 main
 main.exe
 text_example
 examples/libbridgeengine.so
 *.a
+!XJ380_XACT_2026v4_xj380/**/*.a
 .trae/*
 *.so
 *.dll
