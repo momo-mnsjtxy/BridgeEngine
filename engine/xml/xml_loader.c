@@ -6,7 +6,7 @@
 #include <ctype.h>
 
 
-//Hand make xml loader, not use libxml2:( XJ380 Not support libxml2
+
 
 #define MAX_LINE_LENGTH 512
 #define MAX_ATTR_LENGTH 128

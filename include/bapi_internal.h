@@ -1,21 +1,22 @@
 #pragma once
 
-#include <SDL3/SDL.h>
+#include "platform/platform_types.h"
 
-#define BAPI_EVENT_QUIT SDL_EVENT_QUIT
-#define BAPI_EVENT_KEY_DOWN SDL_EVENT_KEY_DOWN
-#define BAPI_EVENT_MOUSE_BUTTON_DOWN SDL_EVENT_MOUSE_BUTTON_DOWN
-#define BAPI_EVENT_MOUSE_BUTTON_UP SDL_EVENT_MOUSE_BUTTON_UP
-#define BAPI_EVENT_MOUSE_MOTION SDL_EVENT_MOUSE_MOTION
-#define BAPI_BUTTON_LEFT SDL_BUTTON_LEFT
+#define BAPI_EVENT_QUIT PLAT_EVENT_QUIT
+#define BAPI_EVENT_KEY_DOWN PLAT_EVENT_KEY_DOWN
+#define BAPI_EVENT_MOUSE_BUTTON_DOWN PLAT_EVENT_MOUSE_BUTTON_DOWN
+#define BAPI_EVENT_MOUSE_BUTTON_UP PLAT_EVENT_MOUSE_BUTTON_UP
+#define BAPI_EVENT_MOUSE_MOTION PLAT_EVENT_MOUSE_MOTION
+
+#define BAPI_BUTTON_LEFT PLAT_BUTTON_LEFT
 
 struct bapi_event_internal {
-    SDL_Event event;
+	plat_event_t event;
 };
 
 typedef struct bapi_event_internal bapi_event_t;
 
-extern SDL_Renderer* bapi_internal_renderer;
+extern plat_renderer_t bapi_internal_renderer;
 
 #ifdef __cplusplus
 extern "C" {

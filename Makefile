@@ -43,7 +43,7 @@ else
 endif
 
 # Source files
-C_SOURCES := engine/master/init.c engine/render/create.c engine/render/draw.c engine/mouse_drawing.c engine/text.c engine/version.c engine/log.c engine/button/button.c engine/scene/scene.c engine/level/level.c engine/xml/xml_loader.c engine/audio/audio.c engine/video/video.c
+C_SOURCES := engine/platform/platform.c engine/platform/sdl3/platform_sdl3.c engine/master/init.c engine/render/create.c engine/render/draw.c engine/mouse_drawing.c engine/text.c engine/version.c engine/log.c engine/button/button.c engine/scene/scene.c engine/level/level.c engine/xml/xml_loader.c engine/audio/audio.c engine/video/video.c
 LIB_OBJS := $(C_SOURCES:%.c=%.o)
 MAIN_OBJS := $(LIB_OBJS) main.o
 
@@ -60,10 +60,65 @@ lib: $(LIB_OBJS)
 	@$(CC) $(C_FLAGS) $(LD_FLAGS) -shared -fPIC $^ -o libbridgeengine$(LIB_EXT) $(LIBS)
 
 # Build static library
-staticlib: engine/master/init.o engine/render/create.o engine/render/draw.o engine/mouse_drawing.o engine/text.o engine/version.o engine/log.o engine/button/button.o engine/scene/scene.o engine/level/level.o engine/xml/xml_loader.o engine/audio/audio.o engine/video/video.o
+staticlib: engine/platform/platform.o engine/platform/sdl3/platform_sdl3.o engine/master/init.o engine/render/create.o engine/render/draw.o engine/mouse_drawing.o engine/text.o engine/version.o engine/log.o engine/button/button.o engine/scene/scene.o engine/level/level.o engine/xml/xml_loader.o engine/audio/audio.o engine/video/video.o
 	@ar cr libbridgeengine.a $^
-xj380_statickib: 
-# Build main executable
+
+
+
+XJ380_SDK := $(CURDIR)/XJ380_XACT_2026v4_xj380/depend
+
+XJ380_XAPI_OBJS := $(wildcard $(XJ380_SDK)/obj-gui/*.o) \
+    $(wildcard $(XJ380_SDK)/obj-gui/*/*.o) \
+    $(wildcard $(XJ380_SDK)/obj-gui/*/*/*.o) \
+    $(XJ380_SDK)/obj-gui/liballoc-x86_64.a
+
+XJ380_CC := clang
+XJ380_CXX := clang++
+XJ380_LD := ld
+
+XJ380_INC_FLAGS := -I include \
+    -I $(XJ380_SDK)/include \
+    -I $(XJ380_SDK)/include/xposix
+XJ380_DEF_FLAGS := -DUSE_BACKEND_XJ380 -DBAPI_LOG_ENABLED -D__XJ380_OS__ -DXJ380_OS \
+    -DM_PI=3.14159265358979323846 -Dcosf=cos -Dsinf=sin -Dsqrtf=sqrt \
+    -Dabs=__xj380_abs
+
+
+XJ380_C_FLAGS := -ffreestanding -fno-builtin -m64 -std=c11 \
+    -fno-stack-protector -fshort-wchar -nostdinc \
+    -O -g -fPIC $(XJ380_INC_FLAGS) $(XJ380_DEF_FLAGS)
+
+
+XJ380_CXX_FLAGS := -ffreestanding -fno-builtin -m64 -std=c++11 \
+    -fno-stack-protector -fno-exceptions -fshort-wchar -nostdinc \
+    -O -g -fPIC $(XJ380_INC_FLAGS) $(XJ380_DEF_FLAGS)
+
+XJ380_C_SOURCES := engine/platform/platform.c engine/master/init.c engine/render/create.c engine/render/draw.c engine/mouse_drawing.c engine/text.c engine/version.c engine/log.c engine/button/button.c engine/scene/scene.c engine/level/level.c engine/xml/xml_loader.c engine/audio/audio.c engine/video/video_stub.c
+XJ380_CPP_SOURCES := engine/platform/xj380/platform_xj380.cpp
+XJ380_C_OBJS := $(XJ380_C_SOURCES:%.c=%.xj380.o)
+XJ380_CPP_OBJS := $(XJ380_CPP_SOURCES:%.cpp=%.xj380.o)
+XJ380_OBJS := $(XJ380_C_OBJS) $(XJ380_CPP_OBJS)
+
+
+%.xj380.o: %.c
+	@echo XJ380_CC $< -> $@
+	@$(XJ380_CC) $(XJ380_C_FLAGS) -c -o $@ $<
+
+%.xj380.o: %.cpp
+	@echo XJ380_CXX $< -> $@
+	@$(XJ380_CXX) $(XJ380_CXX_FLAGS) -c -o $@ $<
+
+# XJ380 static library
+xj380_staticlib: $(XJ380_OBJS)
+	@rm -f libbridgeengine_xj380.a
+	@echo "AR libbridgeengine_xj380.a"
+	@ar cr libbridgeengine_xj380.a $^
+
+
+xj380_epf: xj380_staticlib xj380_main.xj380.o
+	@echo "XJ380_LD bridgeengine_demo.epf"
+	@$(XJ380_LD) -Ttext=0x200000 $(XJ380_XAPI_OBJS) xj380_main.xj380.o libbridgeengine_xj380.a -o bridgeengine_demo.epf
+
 main: $(MAIN_OBJS)
 	@echo LINK $^ -> main$(EXE_EXT)
 	@$(CC) $(C_FLAGS) $(LD_FLAGS) $^ -o main$(EXE_EXT) $(LIBS)
@@ -95,9 +150,9 @@ check: $(C_SOURCES:%=%.tidy) $(S_SOURCES:%=%.tidy) $(HEADERS:%=%.tidy)
 clean:
 	@echo Removing $(LIB_OBJS) main.o main$(EXE_EXT) libbridgeengine$(LIB_EXT) libbridgeengine.a text_example$(EXE_EXT)
 ifeq ($(OS),Windows_NT)
-	@del /f /q engine\master\init.o engine\render\create.o engine\render\draw.o engine\mouse_drawing.o engine\text.o engine\version.o main.o main.exe libbridgeengine.so libbridgeengine.dll libbridgeengine.a text_example.exe engine\scene\scene.o engine\level\level.o engine\xml\xml_loader.o engine\log.o engine\button\button.o engine\audio\audio.o engine\video\video.o 2>nul
+	@del /f /q engine\platform\platform.o engine\platform\sdl3\platform_sdl3.o engine\master\init.o engine\render\create.o engine\render\draw.o engine\mouse_drawing.o engine\text.o engine\version.o main.o main.exe libbridgeengine.so libbridgeengine.dll libbridgeengine.a text_example.exe engine\scene\scene.o engine\level\level.o engine\xml\xml_loader.o engine\log.o engine\button\button.o engine\audio\audio.o engine\video\video.o 2>nul
 else
-	@rm -f engine/master/init.o engine/render/create.o engine/render/draw.o engine/mouse_drawing.o engine/text.o engine/version.o main.o main libbridgeengine.so libbridgeengine.dll libbridgeengine.a text_example engine/scene/scene.o engine/level/level.o engine/xml/xml_loader.o engine/log.o engine/button/button.o engine/audio/audio.o engine/video/video.o
+	@rm -f engine/platform/platform.o engine/platform/sdl3/platform_sdl3.o engine/master/init.o engine/render/create.o engine/render/draw.o engine/mouse_drawing.o engine/text.o engine/version.o main.o main libbridgeengine.so libbridgeengine.dll libbridgeengine.a text_example engine/scene/scene.o engine/level/level.o engine/xml/xml_loader.o engine/log.o engine/button/button.o engine/audio/audio.o engine/video/video.o engine/video/video_stub.o engine/platform/xj380/platform_xj380.o xj380_main.o libbridgeengine_xj380.a bridgeengine_demo.epf *.xj380.o
 endif
 
 # Install
