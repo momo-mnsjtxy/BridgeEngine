@@ -16,6 +16,12 @@ Platform adapters expose grouped capabilities:
 
 `plat_get()` remains the single internal entry point. The compatibility function pointers on `plat_interface_t` are populated from the grouped capabilities during `plat_init()` so older engine modules can migrate gradually.
 
+## Text Backends
+
+The SDL3 desktop backend uses SDL3_ttf and loads font files through the BAPI text functions.
+
+The XJ380 backend uses XAPI's built-in text drawing path. XJ380 user headers currently define `WSTR` as `char *`, so the backend treats BAPI text as byte strings passed through to XAPI; it does not perform UTF-16 or `wchar_t` conversion. XJ380 font file loading is not implemented yet, and encoding compatibility should be handled in a dedicated adapter if XAPI requires a specific non-UTF-8 encoding.
+
 ## Engine State
 
 Single-instance engine state lives behind `bapi_engine_state()`. This does not add multi-window or multi-engine support; it only collects lifecycle state that was previously scattered across file-static globals.

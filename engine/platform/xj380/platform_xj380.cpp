@@ -27,6 +27,28 @@ static char *xj380_copy_string(const char *text)
 	return copy;
 }
 
+static char *xj380_copy_string_len(const char *text, int len)
+{
+	if (!text) return NULL;
+	size_t copy_len = (len >= 0) ? (size_t)len : strlen(text);
+	char  *copy		= (char *)malloc(copy_len + 1);
+	if (copy) {
+		memcpy(copy, text, copy_len);
+		copy[copy_len] = '\0';
+	}
+	return copy;
+}
+
+static WSTR xj380_xapi_string(const char *text)
+{
+	/*
+	 * XJ380 user headers currently define WSTR as char*, not as a wide string.
+	 * Keep the const removal localized so call sites do not imply UTF-16 or
+	 * wchar_t conversion.
+	 */
+	return const_cast<char *>(text ? text : "");
+}
+
 struct plat_window {
 	HDLE handle;
 	int	 width;
@@ -250,7 +272,7 @@ static plat_window_t xj380_create_window(const char *title, int width, int heigh
 	XWINDOW xwin;
 	xwin.width	= (UINT32)width;
 	xwin.height = (UINT32)height;
-	xwin.title	= (WSTR)title;
+	xwin.title	= xj380_xapi_string(title);
 	xwin.sets	= XWIN_NORMAL;
 
 	xapi_CreateWindow(&w->handle, &xwin);
@@ -397,7 +419,7 @@ static void xj380_render_texture(plat_renderer_t renderer, plat_texture_t textur
 
 		if (texture->data.image.filepath) {
 			xapi_DrawPicture(handle, (UINT32)x, (UINT32)y, (UINT32)w, (UINT32)h,
-							 (WSTR)texture->data.image.filepath);
+							 xj380_xapi_string(texture->data.image.filepath));
 		}
 		break;
 
@@ -406,7 +428,7 @@ static void xj380_render_texture(plat_renderer_t renderer, plat_texture_t textur
 		if (texture->data.text.text) {
 			UINT32 color = make_rgba(texture->data.text.r, texture->data.text.g,
 									 texture->data.text.b, texture->data.text.a);
-			xapi_DrawText(handle, (UINT32)x, (UINT32)y, (WSTR)texture->data.text.text,
+			xapi_DrawText(handle, (UINT32)x, (UINT32)y, xj380_xapi_string(texture->data.text.text),
 						  (UINT32)texture->data.text.size, color);
 		}
 		break;
@@ -580,7 +602,7 @@ static plat_surface_t *xj380_load_image(const char *filepath)
 	memset(s, 0, sizeof(plat_surface_t));
 
 	UINT32 w = 0, h = 0;
-	xapi_GetPicSize(&w, &h, (WSTR)filepath);
+	xapi_GetPicSize(&w, &h, xj380_xapi_string(filepath));
 
 	s->type				   = SURF_IMAGE;
 	s->width			   = (int)w;
@@ -678,23 +700,21 @@ static plat_surface_t *xj380_render_text_blended(plat_font_t font, const char *t
 
 	s->type = SURF_TEXT;
 
-	UINT64 text_w = xapi_CalcTextWidth((WSTR)text, (UINT32)font->size);
-	s->width	  = (int)text_w;
-	s->height	  = (int)(font->size * 1.2f);
-
-	int text_len	  = (len >= 0) ? len : (int)strlen(text);
-	s->data.text.text = (char *)malloc(text_len + 1);
+	s->data.text.text = xj380_copy_string_len(text, len);
 	if (!s->data.text.text) {
 		free(s);
 		return NULL;
 	}
-	memcpy(s->data.text.text, text, text_len);
-	s->data.text.text[text_len] = '\0';
-	s->data.text.size			= font->size;
-	s->data.text.r				= r;
-	s->data.text.g				= g;
-	s->data.text.b				= b;
-	s->data.text.a				= a;
+
+	UINT64 text_w = xapi_CalcTextWidth(xj380_xapi_string(s->data.text.text), (UINT32)font->size);
+	s->width	  = (int)text_w;
+	s->height	  = (int)(font->size * 1.2f);
+
+	s->data.text.size = font->size;
+	s->data.text.r	  = r;
+	s->data.text.g	  = g;
+	s->data.text.b	  = b;
+	s->data.text.a	  = a;
 
 	return s;
 }
@@ -703,11 +723,14 @@ static int xj380_get_string_size(plat_font_t font, const char *text, int len, in
 {
 	if (!font || !text) return -1;
 
-	UINT64 text_w = xapi_CalcTextWidth((WSTR)text, (UINT32)font->size);
+	char *text_copy = xj380_copy_string_len(text, len);
+	if (!text_copy) return -1;
+
+	UINT64 text_w = xapi_CalcTextWidth(xj380_xapi_string(text_copy), (UINT32)font->size);
 	if (w) *w = (int)text_w;
 	if (h) *h = (int)(font->size * 1.2f);
 
-	(void)len;
+	free(text_copy);
 	return 0;
 }
 
@@ -851,8 +874,8 @@ static void xj380_log_debug(const char *fmt, ...)
 	{
 		char buf[512];
 		vsnprintf(buf, sizeof(buf), fmt, args);
-		xapi_Output((WSTR) "[DEBUG] ");
-		xapi_Output((WSTR)buf);
+		xapi_Output(xj380_xapi_string("[DEBUG] "));
+		xapi_Output(xj380_xapi_string(buf));
 	}
 	va_end(args);
 }
@@ -864,7 +887,7 @@ static void xj380_log_info(const char *fmt, ...)
 	{
 		char buf[512];
 		vsnprintf(buf, sizeof(buf), fmt, args);
-		xapi_Output((WSTR)buf);
+		xapi_Output(xj380_xapi_string(buf));
 	}
 	va_end(args);
 }
@@ -876,8 +899,8 @@ static void xj380_log_warn(const char *fmt, ...)
 	{
 		char buf[512];
 		vsnprintf(buf, sizeof(buf), fmt, args);
-		xapi_Output((WSTR) "[WARN] ");
-		xapi_Output((WSTR)buf);
+		xapi_Output(xj380_xapi_string("[WARN] "));
+		xapi_Output(xj380_xapi_string(buf));
 	}
 	va_end(args);
 }
@@ -889,8 +912,8 @@ static void xj380_log_error(const char *fmt, ...)
 	{
 		char buf[512];
 		vsnprintf(buf, sizeof(buf), fmt, args);
-		xapi_Output((WSTR) "[ERROR] ");
-		xapi_Output((WSTR)buf);
+		xapi_Output(xj380_xapi_string("[ERROR] "));
+		xapi_Output(xj380_xapi_string(buf));
 	}
 	va_end(args);
 }
@@ -902,8 +925,8 @@ static void xj380_log_critical(const char *fmt, ...)
 	{
 		char buf[512];
 		vsnprintf(buf, sizeof(buf), fmt, args);
-		xapi_Output((WSTR) "[CRITICAL] ");
-		xapi_Output((WSTR)buf);
+		xapi_Output(xj380_xapi_string("[CRITICAL] "));
+		xapi_Output(xj380_xapi_string(buf));
 	}
 	va_end(args);
 }
