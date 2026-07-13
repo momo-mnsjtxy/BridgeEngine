@@ -21,34 +21,21 @@ static const char* skip_whitespace(const char* str) {
     return str;
 }
 
-static int parse_attribute_inline(const char* attr_start, const char* attr_end, 
-                                   char* name_out, char* value_out) {
-    const char* eq = find_char(attr_start, '=');
-    if (!eq || eq >= attr_end) return -1;
-    
-    int name_len = (int)(eq - attr_start);
-    if (name_len >= MAX_ATTR_LENGTH) name_len = MAX_ATTR_LENGTH - 1;
-    memcpy(name_out, attr_start, name_len);
-    name_out[name_len] = '\0';
-    
-    const char* quote1 = find_char(eq, '"');
-    if (!quote1 || quote1 >= attr_end) return -1;
-    
-    const char* quote2 = find_char(quote1 + 1, '"');
-    if (!quote2 || quote2 > attr_end) return -1;
-    
-    int value_len = (int)(quote2 - quote1 - 1);
-    if (value_len >= MAX_ATTR_LENGTH) value_len = MAX_ATTR_LENGTH - 1;
-    memcpy(value_out, quote1 + 1, value_len);
-    value_out[value_len] = '\0';
-    
-    return 0;
+static int is_self_closing_tag(const char* line, const char* line_end) {
+    while (line_end > line && isspace((unsigned char)line_end[-1])) line_end--;
+    return line_end > line && line_end[-1] == '/';
 }
 
 static const char* get_attr_value_inline(const char* line_start, const char* line_end,
                                           const char* attr_name, char* value_out) {
     const char* pos = line_start;
     size_t attr_name_len = strlen(attr_name);
+
+    const char* tag_start = find_char(pos, '<');
+    if (tag_start && tag_start < line_end) {
+        pos = tag_start + 1;
+        while (pos < line_end && !isspace((unsigned char)*pos) && *pos != '>') pos++;
+    }
     
     while (pos < line_end) {
         const char* eq = find_char(pos, '=');
@@ -135,6 +122,13 @@ bapi_scene_manager_t bapi_scene_manager_load_from_xml(const char* filepath) {
                 }
             }
             memset(&callbacks, 0, sizeof(callbacks));
+            if (line_end && is_self_closing_tag(line, line_end)) {
+                if (scene_name[0] != '\0') {
+                    bapi_scene_t scene = bapi_scene_create(scene_name, callbacks);
+                    if (scene) bapi_scene_manager_add_scene(manager, scene);
+                }
+                scene_name[0] = '\0';
+            }
         } else if (strcmp(tag_name, "/scene") == 0) {
             if (scene_name[0] != '\0') {
                 bapi_scene_t scene = bapi_scene_create(scene_name, callbacks);
@@ -182,6 +176,13 @@ bapi_level_manager_t bapi_level_manager_load_from_xml(const char* filepath) {
                 }
             }
             memset(&callbacks, 0, sizeof(callbacks));
+            if (line_end && is_self_closing_tag(line, line_end)) {
+                if (level_name[0] != '\0') {
+                    bapi_level_t level = bapi_level_create(level_name, level_index, callbacks);
+                    if (level) bapi_level_manager_add_level(manager, level);
+                }
+                level_name[0] = '\0';
+            }
         } else if (strcmp(tag_name, "/level") == 0) {
             if (level_name[0] != '\0') {
                 bapi_level_t level = bapi_level_create(level_name, level_index, callbacks);

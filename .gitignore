@@ -385,3 +385,23 @@ examples/libbridgeengine.so
 .trae/*
 *.so
 *.dll
+
+# CMake
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CMakeUserPresets.json
+*.cmake
+!cmake/FindFFmpeg.cmake
+
+# Compiled artifacts (platform-specific)
+main.exe
+main
+text_example.exe
+text_example
+log_test.exe
+log_test
+bridgeengine_demo
+bridgeengine_demo.exe
+libbridgeengine.*

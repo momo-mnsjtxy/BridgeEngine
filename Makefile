@@ -42,8 +42,13 @@ else
     LIBS := -lSDL3 -lSDL3_image -lSDL3_ttf -lavcodec -lavformat -lavutil -lswscale -lswresample -lGL -lm
 endif
 
-# Source files
-C_SOURCES := engine/platform/platform.c engine/platform/sdl3/platform_sdl3.c engine/master/init.c engine/render/create.c engine/render/draw.c engine/mouse_drawing.c engine/text.c engine/version.c engine/log.c engine/button/button.c engine/scene/scene.c engine/level/level.c engine/xml/xml_loader.c engine/audio/audio.c engine/video/video.c
+# Source files (new directory layout)
+CORE_SOURCES := engine/platform/platform.c engine/master/init.c engine/master/version.c engine/render/draw.c
+CORE_SOURCES += engine/text/text.c engine/log/log.c engine/mouse_drawing.c
+CORE_SOURCES += engine/button/button.c engine/scene/scene.c engine/level/level.c
+CORE_SOURCES += engine/xml/xml_loader.c engine/audio/audio.c
+CORE_SOURCES += engine/math/math.c engine/texture/texture.c engine/input/input.c engine/camera/camera.c
+C_SOURCES := $(CORE_SOURCES) engine/platform/sdl3/platform_sdl3.c engine/video/video.c
 LIB_OBJS := $(C_SOURCES:%.c=%.o)
 MAIN_OBJS := $(LIB_OBJS) main.o
 
@@ -60,7 +65,7 @@ lib: $(LIB_OBJS)
 	@$(CC) $(C_FLAGS) $(LD_FLAGS) -shared -fPIC $^ -o libbridgeengine$(LIB_EXT) $(LIBS)
 
 # Build static library
-staticlib: engine/platform/platform.o engine/platform/sdl3/platform_sdl3.o engine/master/init.o engine/render/create.o engine/render/draw.o engine/mouse_drawing.o engine/text.o engine/version.o engine/log.o engine/button/button.o engine/scene/scene.o engine/level/level.o engine/xml/xml_loader.o engine/audio/audio.o engine/video/video.o
+staticlib: $(LIB_OBJS)
 	@ar cr libbridgeengine.a $^
 
 
@@ -93,7 +98,10 @@ XJ380_CXX_FLAGS := -ffreestanding -fno-builtin -m64 -std=c++11 \
     -fno-stack-protector -fno-exceptions -fshort-wchar -nostdinc \
     -O -g -fPIC $(XJ380_INC_FLAGS) $(XJ380_DEF_FLAGS)
 
-XJ380_C_SOURCES := engine/platform/platform.c engine/master/init.c engine/render/create.c engine/render/draw.c engine/mouse_drawing.c engine/text.c engine/version.c engine/log.c engine/button/button.c engine/scene/scene.c engine/level/level.c engine/xml/xml_loader.c engine/audio/audio.c engine/video/video_stub.c
+XJ380_C_SOURCES := engine/platform/platform.c engine/master/init.c engine/master/version.c engine/render/draw.c
+XJ380_C_SOURCES += engine/text/text.c engine/log/log.c engine/mouse_drawing.c
+XJ380_C_SOURCES += engine/button/button.c engine/scene/scene.c engine/level/level.c
+XJ380_C_SOURCES += engine/xml/xml_loader.c engine/audio/audio.c engine/video/video_stub.c
 XJ380_CPP_SOURCES := engine/platform/xj380/platform_xj380.cpp
 XJ380_C_OBJS := $(XJ380_C_SOURCES:%.c=%.xj380.o)
 XJ380_CPP_OBJS := $(XJ380_CPP_SOURCES:%.cpp=%.xj380.o)
@@ -150,9 +158,12 @@ check: $(C_SOURCES:%=%.tidy) $(S_SOURCES:%=%.tidy) $(HEADERS:%=%.tidy)
 clean:
 	@echo Removing $(LIB_OBJS) main.o main$(EXE_EXT) libbridgeengine$(LIB_EXT) libbridgeengine.a text_example$(EXE_EXT)
 ifeq ($(OS),Windows_NT)
-	@del /f /q engine\platform\platform.o engine\platform\sdl3\platform_sdl3.o engine\master\init.o engine\render\create.o engine\render\draw.o engine\mouse_drawing.o engine\text.o engine\version.o main.o main.exe libbridgeengine.so libbridgeengine.dll libbridgeengine.a text_example.exe engine\scene\scene.o engine\level\level.o engine\xml\xml_loader.o engine\log.o engine\button\button.o engine\audio\audio.o engine\video\video.o 2>nul
+	@del /f /q $(subst /,\,$(LIB_OBJS)) main.o main.exe libbridgeengine.so libbridgeengine.dll libbridgeengine.a text_example.exe 2>nul
 else
-	@rm -f engine/platform/platform.o engine/platform/sdl3/platform_sdl3.o engine/master/init.o engine/render/create.o engine/render/draw.o engine/mouse_drawing.o engine/text.o engine/version.o main.o main libbridgeengine.so libbridgeengine.dll libbridgeengine.a text_example engine/scene/scene.o engine/level/level.o engine/xml/xml_loader.o engine/log.o engine/button/button.o engine/audio/audio.o engine/video/video.o engine/video/video_stub.o engine/platform/xj380/platform_xj380.o xj380_main.o libbridgeengine_xj380.a bridgeengine_demo.epf *.xj380.o
+	@rm -f $(LIB_OBJS) $(XJ380_C_OBJS) $(XJ380_CPP_OBJS)
+	@rm -f main.o main.xj380.o xj380_main.o main$(EXE_EXT) text_example$(EXE_EXT)
+	@rm -f libbridgeengine$(LIB_EXT) libbridgeengine.a libbridgeengine_xj380.a bridgeengine_demo.epf
+	@rm -f *.xj380.o engine/*.o
 endif
 
 # Install

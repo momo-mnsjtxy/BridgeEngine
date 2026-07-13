@@ -1,7 +1,6 @@
 #pragma once
 
 #include "master/init.h"
-#include "render/create.h"
 #include "render/draw.h"
 #include "mouse_drawing.h"
 #include "text/text.h"
@@ -9,6 +8,10 @@
 #include "video/video.h"
 #include "bapi.h"
 #include "log/log.h"
+#include "math/math.h"
+#include "texture/texture.h"
+#include "input/input.h"
+#include "camera/camera.h"
 
 #define BRIDGEENGINE_VERSION "1.0.0"
 #define BRIDGEENGINE_MAJOR 1
