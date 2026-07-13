@@ -16,30 +16,32 @@ Source files are tracked in Git:
 - Small example assets intentionally used by examples, such as files under
   `audio_example/`, `image_example/`, `text/`, and `video_example/`.
 
-## Vendored XJ380 SDK Inputs
+## Local XJ380 SDK
 
-The XJ380 directory is a local SDK input area, not a build output directory.
-Only the parts needed for source compatibility and developer reference should be
-tracked:
+The XJ380 SDK is a local developer-provided dependency, not repository content.
+Do not track `XJ380_XACT_2026v4_xj380/` in Git. Developers who need XJ380
+targets should place the SDK at:
 
-- `XJ380_XACT_2026v4_xj380/*.pdf`
+- `XJ380_XACT_2026v4_xj380/`
+
+The XJ380 GUI build expects SDK headers and prebuilt runtime objects under that
+local directory:
+
 - `XJ380_XACT_2026v4_xj380/depend/include/**`
-
-The XJ380 GUI build also needs prebuilt SDK runtime objects. Those files are
-local SDK installation artifacts and must be supplied outside Git:
 
 - `XJ380_XACT_2026v4_xj380/depend/obj-gui/**/*.o`
 - `XJ380_XACT_2026v4_xj380/depend/obj-gui/*.a`
 
-The SDK may also include TUI runtime objects. BridgeEngine does not link them
-today, but they are still local SDK artifacts and should not be tracked:
+The SDK may also include PDFs, tools, EPF files, and TUI runtime objects. They
+are all local SDK artifacts and should not be tracked:
 
+- `XJ380_XACT_2026v4_xj380/*.pdf`
+- `XJ380_XACT_2026v4_xj380/bin/**`
 - `XJ380_XACT_2026v4_xj380/depend/obj-tui/**/*.o`
 - `XJ380_XACT_2026v4_xj380/depend/obj-tui/*.a`
 
-Place the GUI objects in the expected SDK directory before running the XJ380
-targets. The Makefile reports a clear error when required GUI objects are
-missing.
+The Makefile reports a clear error when required XJ380 headers or GUI runtime
+objects are missing.
 
 ## Build And Runtime Outputs
 

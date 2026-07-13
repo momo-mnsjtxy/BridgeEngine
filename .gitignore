@@ -47,15 +47,8 @@ libbridgeengine.a
 libbridgeengine_xj380.a
 bridgeengine_demo.epf
 
-# XJ380 SDK inputs allowed in Git. Runtime objects and generated programs stay
-# ignored and must be supplied by the local SDK installation when building.
-XJ380_XACT_2026v4_xj380/**
-!XJ380_XACT_2026v4_xj380/
-!XJ380_XACT_2026v4_xj380/*.pdf
-!XJ380_XACT_2026v4_xj380/depend/
-XJ380_XACT_2026v4_xj380/depend/**
-!XJ380_XACT_2026v4_xj380/depend/include/
-!XJ380_XACT_2026v4_xj380/depend/include/**
+# XJ380 SDK is a local developer-provided dependency, not repository content.
+XJ380_XACT_2026v4_xj380/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
