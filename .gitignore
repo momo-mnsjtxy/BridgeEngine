@@ -27,12 +27,35 @@ x86/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
-!XJ380_XACT_2026v4_xj380/
-!XJ380_XACT_2026v4_xj380/**/*
 [Oo]bj/
 [Oo]ut/
 *.log
 [Ll]ogs/
+
+# BridgeEngine build and runtime outputs
+*.o
+*.a
+*.so
+*.dll
+*.exe
+*.epf
+main
+text_example
+libbridgeengine.so
+libbridgeengine.dll
+libbridgeengine.a
+libbridgeengine_xj380.a
+bridgeengine_demo.epf
+
+# XJ380 SDK inputs allowed in Git. Runtime objects and generated programs stay
+# ignored and must be supplied by the local SDK installation when building.
+XJ380_XACT_2026v4_xj380/**
+!XJ380_XACT_2026v4_xj380/
+!XJ380_XACT_2026v4_xj380/*.pdf
+!XJ380_XACT_2026v4_xj380/depend/
+XJ380_XACT_2026v4_xj380/depend/**
+!XJ380_XACT_2026v4_xj380/depend/include/
+!XJ380_XACT_2026v4_xj380/depend/include/**
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
@@ -206,12 +229,9 @@ PublishScripts/
 # NuGet v3's project.json files produces more ignorable files
 *.nuget.props
 *.nuget.targets
-*.epf
 # Microsoft Azure Build Output
 csx/
 *.build.csdef
-!XJ380_XACT_2026v4_xj380/
-!XJ380_XACT_2026v4_xj380/**/*
 
 # Microsoft Azure Emulator
 ecf/
@@ -374,14 +394,6 @@ compile_commands.json
 .vscode
 .idea
 
-*.o
-!XJ380_XACT_2026v4_xj380/**/*.o
-main
-main.exe
-text_example
-examples/libbridgeengine.so
-*.a
-!XJ380_XACT_2026v4_xj380/**/*.a
 .trae/*
 *.so
 *.dll

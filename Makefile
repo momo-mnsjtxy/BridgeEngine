@@ -56,12 +56,12 @@ all: lib main
 
 # Compile rules
 %.o: %.c
-	@echo CC $< -> $@
+	@echo "CC $< -> $@"
 	@$(CC) $(C_FLAGS) -c -o $@ $<
 
 # Build shared library
 lib: $(LIB_OBJS)
-	@echo LIB $^ -> libbridgeengine$(LIB_EXT)
+	@echo "LIB $^ -> libbridgeengine$(LIB_EXT)"
 	@$(CC) $(C_FLAGS) $(LD_FLAGS) -shared -fPIC $^ -o libbridgeengine$(LIB_EXT) $(LIBS)
 
 # Build static library
@@ -76,6 +76,7 @@ XJ380_XAPI_OBJS := $(wildcard $(XJ380_SDK)/obj-gui/*.o) \
     $(wildcard $(XJ380_SDK)/obj-gui/*/*.o) \
     $(wildcard $(XJ380_SDK)/obj-gui/*/*/*.o) \
     $(XJ380_SDK)/obj-gui/liballoc-x86_64.a
+XJ380_REQUIRED_ARCHIVE := $(XJ380_SDK)/obj-gui/liballoc-x86_64.a
 
 XJ380_CC := clang
 XJ380_CXX := clang++
@@ -107,20 +108,28 @@ XJ380_C_OBJS := $(XJ380_C_SOURCES:%.c=%.xj380.o)
 XJ380_CPP_OBJS := $(XJ380_CPP_SOURCES:%.cpp=%.xj380.o)
 XJ380_OBJS := $(XJ380_C_OBJS) $(XJ380_CPP_OBJS)
 
+.PHONY: check_xj380_sdk
+check_xj380_sdk:
+	@test -d "$(XJ380_SDK)/include" || { echo "XJ380 SDK headers not found: $(XJ380_SDK)/include"; exit 1; }
+	@test -d "$(XJ380_SDK)/obj-gui" || { echo "XJ380 SDK GUI objects not found: $(XJ380_SDK)/obj-gui"; exit 1; }
+	@test -n "$(wildcard $(XJ380_SDK)/obj-gui/*.o $(XJ380_SDK)/obj-gui/*/*.o $(XJ380_SDK)/obj-gui/*/*/*.o)" || { echo "XJ380 SDK GUI object files are missing under $(XJ380_SDK)/obj-gui"; exit 1; }
+	@test -f "$(XJ380_REQUIRED_ARCHIVE)" || { echo "XJ380 SDK archive not found: $(XJ380_REQUIRED_ARCHIVE)"; exit 1; }
+
+$(XJ380_OBJS): | check_xj380_sdk
 
 %.xj380.o: %.c
-	@echo XJ380_CC $< -> $@
+	@echo "XJ380_CC $< -> $@"
 	@$(XJ380_CC) $(XJ380_C_FLAGS) -c -o $@ $<
 
 %.xj380.o: %.cpp
-	@echo XJ380_CXX $< -> $@
+	@echo "XJ380_CXX $< -> $@"
 	@$(XJ380_CXX) $(XJ380_CXX_FLAGS) -c -o $@ $<
 
 # XJ380 static library
-xj380_staticlib: $(XJ380_OBJS)
+xj380_staticlib: $(XJ380_OBJS) | check_xj380_sdk
 	@rm -f libbridgeengine_xj380.a
 	@echo "AR libbridgeengine_xj380.a"
-	@ar cr libbridgeengine_xj380.a $^
+	@ar cr libbridgeengine_xj380.a $(XJ380_OBJS)
 
 
 xj380_epf: xj380_staticlib xj380_main.xj380.o
@@ -128,12 +137,12 @@ xj380_epf: xj380_staticlib xj380_main.xj380.o
 	@$(XJ380_LD) -Ttext=0x200000 $(XJ380_XAPI_OBJS) xj380_main.xj380.o libbridgeengine_xj380.a -o bridgeengine_demo.epf
 
 main: $(MAIN_OBJS)
-	@echo LINK $^ -> main$(EXE_EXT)
+	@echo "LINK $^ -> main$(EXE_EXT)"
 	@$(CC) $(C_FLAGS) $(LD_FLAGS) $^ -o main$(EXE_EXT) $(LIBS)
 
 # Build text example
 text_example: text_example.o engine/master/init.o engine/render/create.o engine/text.o
-	@echo LINK $^ -> text_example$(EXE_EXT)
+	@echo "LINK $^ -> text_example$(EXE_EXT)"
 	@$(CC) $(C_FLAGS) $(LD_FLAGS) $^ -o text_example$(EXE_EXT) $(LIBS)
 
 # Formatting
@@ -156,7 +165,7 @@ check: $(C_SOURCES:%=%.tidy) $(S_SOURCES:%=%.tidy) $(HEADERS:%=%.tidy)
 
 # Clean
 clean:
-	@echo Removing $(LIB_OBJS) main.o main$(EXE_EXT) libbridgeengine$(LIB_EXT) libbridgeengine.a text_example$(EXE_EXT)
+	@echo Removing $(LIB_OBJS) $(XJ380_OBJS) main.o main$(EXE_EXT) libbridgeengine$(LIB_EXT) libbridgeengine.a libbridgeengine_xj380.a text_example$(EXE_EXT)
 ifeq ($(OS),Windows_NT)
 	@del /f /q $(subst /,\,$(LIB_OBJS)) main.o main.exe libbridgeengine.so libbridgeengine.dll libbridgeengine.a text_example.exe 2>nul
 else
