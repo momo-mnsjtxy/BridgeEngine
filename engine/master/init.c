@@ -1,11 +1,13 @@
+#include "bapi_internal.h"
+#include "bapi_types.h"
+#include "engine/math.h"
+#include "engine/state.h"
+#include "log/log.h"
 #include "platform/platform.h"
+#include <math.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
-#include <math.h>
-#include "bapi_types.h"
-#include "bapi_internal.h"
-#include "log/log.h"
 
 struct bapi_window_internal {
 	plat_window_t plat_window;
@@ -15,17 +17,53 @@ struct bapi_renderer_internal {
 	plat_renderer_t plat_renderer;
 };
 
-static plat_window_t window = NULL;
-static plat_renderer_t renderer = NULL;
-static bool initialized = false;
+static void bapi_event_from_platform(bapi_event_t *dst, const plat_event_t *src)
+{
+	switch (src->type) {
+	case PLAT_EVENT_QUIT:
+		dst->type = BAPI_EVENT_QUIT;
+		break;
+	case PLAT_EVENT_KEY_DOWN:
+		dst->type		  = BAPI_EVENT_KEY_DOWN;
+		dst->data.key.key = src->data.key.key;
+		break;
+	case PLAT_EVENT_KEY_UP:
+		dst->type		  = BAPI_EVENT_KEY_UP;
+		dst->data.key.key = src->data.key.key;
+		break;
+	case PLAT_EVENT_MOUSE_BUTTON_DOWN:
+		dst->type				= BAPI_EVENT_MOUSE_BUTTON_DOWN;
+		dst->data.button.x		= src->data.button.x;
+		dst->data.button.y		= src->data.button.y;
+		dst->data.button.button = src->data.button.button;
+		break;
+	case PLAT_EVENT_MOUSE_BUTTON_UP:
+		dst->type				= BAPI_EVENT_MOUSE_BUTTON_UP;
+		dst->data.button.x		= src->data.button.x;
+		dst->data.button.y		= src->data.button.y;
+		dst->data.button.button = src->data.button.button;
+		break;
+	case PLAT_EVENT_MOUSE_MOTION:
+		dst->type		   = BAPI_EVENT_MOUSE_MOTION;
+		dst->data.motion.x = src->data.motion.x;
+		dst->data.motion.y = src->data.motion.y;
+		break;
+	default:
+		dst->type = BAPI_EVENT_UNKNOWN;
+		break;
+	}
+}
 
-plat_renderer_t bapi_internal_renderer = NULL;
+plat_renderer_t bapi_internal_get_renderer(void)
+{
+	return bapi_engine_state()->renderer;
+}
 
 bapi_window_t bapi_engine_get_window(void)
 {
 	bapi_window_t win = malloc(sizeof(struct bapi_window_internal));
 	if (win) {
-		win->plat_window = window;
+		win->plat_window = bapi_engine_state()->window;
 	}
 	return win;
 }
@@ -34,18 +72,18 @@ bapi_renderer_t bapi_engine_get_renderer(void)
 {
 	bapi_renderer_t rend = malloc(sizeof(struct bapi_renderer_internal));
 	if (rend) {
-		rend->plat_renderer = renderer;
+		rend->plat_renderer = bapi_engine_state()->renderer;
 	}
 	return rend;
 }
 
-int bapi_engine_init(const char* title, int width, int height)
+int bapi_engine_init(const char *title, int width, int height)
 {
-	if (initialized) {
+	bapi_engine_state_t *state = bapi_engine_state();
+	if (state->initialized) {
 		return 0;
 	}
 
-	
 #ifdef USE_BACKEND_XJ380
 	if (plat_init(plat_xj380_interface()) != 0) {
 #else
@@ -54,7 +92,7 @@ int bapi_engine_init(const char* title, int width, int height)
 		return 1;
 	}
 
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat = plat_get();
 
 	if (plat->init(PLAT_INIT_VIDEO | PLAT_INIT_AUDIO) != 0) {
 		BAPI_LOG_INIT_DEFAULT();
@@ -62,21 +100,28 @@ int bapi_engine_init(const char* title, int width, int height)
 		return 1;
 	}
 
-	window = plat->create_window(title, width, height);
-	if (window == NULL) {
+	state->window = plat->create_window(title, width, height);
+	if (state->window == NULL) {
 		BAPI_LOG_INIT_DEFAULT();
 		BAPI_LOG_CRITICAL("Failed to create window");
 		plat->quit();
 		return 1;
 	}
 
-	renderer = plat->create_renderer(window);
-	bapi_internal_renderer = renderer;
+	state->renderer = plat->create_renderer(state->window);
+	if (state->renderer == NULL) {
+		BAPI_LOG_INIT_DEFAULT();
+		BAPI_LOG_CRITICAL("Failed to create renderer");
+		plat->destroy_window(state->window);
+		state->window = NULL;
+		plat->quit();
+		return 1;
+	}
 
-	plat->set_render_draw_color(renderer, 0, 0, 0, 255);
-	plat->render_clear(renderer);
-	plat->set_render_draw_blend_mode(renderer, PLAT_BLENDMODE_BLEND);
-	plat->render_present(renderer);
+	plat->set_render_draw_color(state->renderer, 0, 0, 0, 255);
+	plat->render_clear(state->renderer);
+	plat->set_render_draw_blend_mode(state->renderer, PLAT_BLENDMODE_BLEND);
+	plat->render_present(state->renderer);
 
 	if (plat->init_ttf() != 0) {
 		BAPI_LOG_INIT_DEFAULT();
@@ -84,111 +129,120 @@ int bapi_engine_init(const char* title, int width, int height)
 		return 0;
 	}
 
-	initialized = true;
+	state->initialized = true;
 	return 0;
 }
 
 void bapi_engine_quit(void)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat = plat_get();
 
 	plat->quit_ttf();
-	if (renderer) {
-		plat->destroy_renderer(renderer);
-		renderer = NULL;
-		bapi_internal_renderer = NULL;
+	bapi_engine_state_t *state = bapi_engine_state();
+	if (state->renderer) {
+		plat->destroy_renderer(state->renderer);
+		state->renderer = NULL;
 	}
-	if (window) {
-		plat->destroy_window(window);
-		window = NULL;
+	if (state->window) {
+		plat->destroy_window(state->window);
+		state->window = NULL;
 	}
 	plat->quit();
-	initialized = false;
+	state->initialized = false;
 	bapi_log_shutdown();
 	plat_shutdown();
+	bapi_engine_state_reset();
 }
 
-int bapi_poll_event(bapi_event_t* event)
+int bapi_poll_event(bapi_event_t *event)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat = plat_get();
 	if (event == NULL) {
 		return plat->poll_event(NULL);
 	}
-	return plat->poll_event(&event->event);
+	plat_event_t plat_event;
+	int			 has_event = plat->poll_event(&plat_event);
+	if (has_event) {
+		bapi_event_from_platform(event, &plat_event);
+	}
+	return has_event;
 }
 
-int bapi_event_get_type(const bapi_event_t* event)
+int bapi_event_get_type(const bapi_event_t *event)
 {
-	return event->event.type;
+	return event->type;
 }
 
-uint8_t bapi_event_get_key_code(const bapi_event_t* event)
+uint8_t bapi_event_get_key_code(const bapi_event_t *event)
 {
-	return (uint8_t)event->event.data.key.key;
+	return (uint8_t)event->data.key.key;
 }
 
-int bapi_event_get_mouse_x(const bapi_event_t* event)
+int bapi_event_get_mouse_x(const bapi_event_t *event)
 {
-	return (int)event->event.data.button.x;
+	return (int)event->data.button.x;
 }
 
-int bapi_event_get_mouse_y(const bapi_event_t* event)
+int bapi_event_get_mouse_y(const bapi_event_t *event)
 {
-	return (int)event->event.data.button.y;
+	return (int)event->data.button.y;
 }
 
-int bapi_event_get_mouse_button(const bapi_event_t* event)
+int bapi_event_get_mouse_button(const bapi_event_t *event)
 {
-	return event->event.data.button.button;
+	return event->data.button.button;
 }
 
-int bapi_event_get_motion_x(const bapi_event_t* event)
+int bapi_event_get_motion_x(const bapi_event_t *event)
 {
-	return (int)event->event.data.motion.x;
+	return (int)event->data.motion.x;
 }
 
-int bapi_event_get_motion_y(const bapi_event_t* event)
+int bapi_event_get_motion_y(const bapi_event_t *event)
 {
-	return (int)event->event.data.motion.y;
+	return (int)event->data.motion.y;
 }
 
-int bapi_event_is_mouse_button_down(const bapi_event_t* event)
+int bapi_event_is_mouse_button_down(const bapi_event_t *event)
 {
-	return event->event.type == PLAT_EVENT_MOUSE_BUTTON_DOWN;
+	return event->type == BAPI_EVENT_MOUSE_BUTTON_DOWN;
 }
 
-int bapi_event_is_mouse_button_up(const bapi_event_t* event)
+int bapi_event_is_mouse_button_up(const bapi_event_t *event)
 {
-	return event->event.type == PLAT_EVENT_MOUSE_BUTTON_UP;
+	return event->type == BAPI_EVENT_MOUSE_BUTTON_UP;
 }
 
-int bapi_event_is_mouse_motion(const bapi_event_t* event)
+int bapi_event_is_mouse_motion(const bapi_event_t *event)
 {
-	return event->event.type == PLAT_EVENT_MOUSE_MOTION;
+	return event->type == BAPI_EVENT_MOUSE_MOTION;
 }
 
 void bapi_render_clear(void)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat	 = plat_get();
+	plat_renderer_t			renderer = bapi_internal_get_renderer();
 	plat->set_render_draw_color(renderer, 0, 0, 0, 255);
 	plat->render_clear(renderer);
 }
 
 void bapi_render_present(void)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat	 = plat_get();
+	plat_renderer_t			renderer = bapi_internal_get_renderer();
 	plat->render_present(renderer);
 }
 
 void bapi_set_render_color(bapi_color_t color)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat	 = plat_get();
+	plat_renderer_t			renderer = bapi_internal_get_renderer();
 	plat->set_render_draw_color(renderer, color.r, color.g, color.b, color.a);
 }
 
 void bapi_delay(uint32_t ms)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat = plat_get();
 	plat->delay(ms);
 }
 
@@ -210,41 +264,47 @@ bapi_color_t bapi_color(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 
 uint32_t bapi_get_ticks(void)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat = plat_get();
 	return plat->get_ticks();
 }
 
 void bapi_draw_pixel(float x, float y, bapi_color_t color)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat	 = plat_get();
+	plat_renderer_t			renderer = bapi_internal_get_renderer();
 	plat->set_render_draw_color(renderer, color.r, color.g, color.b, color.a);
 	plat->render_point(renderer, x, y);
 }
 
 void bapi_draw_line(float x1, float y1, float x2, float y2, bapi_color_t color)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat	 = plat_get();
+	plat_renderer_t			renderer = bapi_internal_get_renderer();
 	plat->set_render_draw_color(renderer, color.r, color.g, color.b, color.a);
 	plat->render_line(renderer, x1, y1, x2, y2);
 }
 
 void bapi_draw_rect(float x, float y, float w, float h, bapi_color_t color)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat	 = plat_get();
+	plat_renderer_t			renderer = bapi_internal_get_renderer();
 	plat->set_render_draw_color(renderer, color.r, color.g, color.b, color.a);
 	plat->render_rect(renderer, x, y, w, h);
 }
 
 void bapi_fill_rect(float x, float y, float w, float h, bapi_color_t color)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat	 = plat_get();
+	plat_renderer_t			renderer = bapi_internal_get_renderer();
 	plat->set_render_draw_color(renderer, color.r, color.g, color.b, color.a);
 	plat->render_fill_rect(renderer, x, y, w, h);
 }
 
-void bapi_draw_triangle(float x1, float y1, float x2, float y2, float x3, float y3, bapi_color_t color)
+void bapi_draw_triangle(float x1, float y1, float x2, float y2, float x3, float y3,
+						bapi_color_t color)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat	 = plat_get();
+	plat_renderer_t			renderer = bapi_internal_get_renderer();
 	plat->set_render_draw_color(renderer, color.r, color.g, color.b, color.a);
 	plat->render_line(renderer, x1, y1, x2, y2);
 	plat->render_line(renderer, x2, y2, x3, y3);
@@ -253,14 +313,15 @@ void bapi_draw_triangle(float x1, float y1, float x2, float y2, float x3, float 
 
 void bapi_draw_circle(float cx, float cy, float radius, bapi_color_t color)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat	 = plat_get();
+	plat_renderer_t			renderer = bapi_internal_get_renderer();
 	plat->set_render_draw_color(renderer, color.r, color.g, color.b, color.a);
-	int segments = 64;
-	float angle_step = 2.0f * (float)M_PI / segments;
+	const int	segments   = 64;
+	const float angle_step = 2.0f * (float)BAPI_PI / (float)segments;
 
 	for (int i = 0; i < segments; i++) {
-		float angle1 = i * angle_step;
-		float angle2 = (i + 1) * angle_step;
+		float angle1 = (float)i * angle_step;
+		float angle2 = (float)(i + 1) * angle_step;
 
 		float x1 = cx + cosf(angle1) * radius;
 		float y1 = cy + sinf(angle1) * radius;
@@ -273,14 +334,15 @@ void bapi_draw_circle(float cx, float cy, float radius, bapi_color_t color)
 
 void bapi_fill_circle(float cx, float cy, float radius, bapi_color_t color)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat	 = plat_get();
+	plat_renderer_t			renderer = bapi_internal_get_renderer();
 	plat->set_render_draw_color(renderer, color.r, color.g, color.b, color.a);
-	int segments = 64;
-	float angle_step = 2.0f * (float)M_PI / segments;
+	const int	segments   = 64;
+	const float angle_step = 2.0f * (float)BAPI_PI / (float)segments;
 
 	for (int i = 0; i < segments; i++) {
-		float angle1 = i * angle_step;
-		float angle2 = (i + 1) * angle_step;
+		float angle1 = (float)i * angle_step;
+		float angle2 = (float)(i + 1) * angle_step;
 
 		float x1 = cx + cosf(angle1) * radius;
 		float y1 = cy + sinf(angle1) * radius;
@@ -299,13 +361,14 @@ void bapi_draw_polygon(float cx, float cy, float radius, int sides, bapi_color_t
 		return;
 	}
 
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat	 = plat_get();
+	plat_renderer_t			renderer = bapi_internal_get_renderer();
 	plat->set_render_draw_color(renderer, color.r, color.g, color.b, color.a);
-	float angle_step = 2.0f * (float)M_PI / sides;
+	float angle_step = 2.0f * (float)BAPI_PI / (float)sides;
 
 	for (int i = 0; i < sides; i++) {
-		float angle1 = i * angle_step - (float)M_PI / 2;
-		float angle2 = (i + 1) * angle_step - (float)M_PI / 2;
+		float angle1 = (float)i * angle_step - (float)BAPI_PI / 2;
+		float angle2 = (float)(i + 1) * angle_step - (float)BAPI_PI / 2;
 
 		float x1 = cx + cosf(angle1) * radius;
 		float y1 = cy + sinf(angle1) * radius;
@@ -322,13 +385,14 @@ void bapi_fill_polygon(float cx, float cy, float radius, int sides, bapi_color_t
 		return;
 	}
 
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat	 = plat_get();
+	plat_renderer_t			renderer = bapi_internal_get_renderer();
 	plat->set_render_draw_color(renderer, color.r, color.g, color.b, color.a);
-	float angle_step = 2.0f * (float)M_PI / sides;
+	float angle_step = 2.0f * (float)BAPI_PI / (float)sides;
 
 	for (int i = 0; i < sides; i++) {
-		float angle1 = i * angle_step - (float)M_PI / 2;
-		float angle2 = (i + 1) * angle_step - (float)M_PI / 2;
+		float angle1 = (float)i * angle_step - (float)BAPI_PI / 2;
+		float angle2 = (float)(i + 1) * angle_step - (float)BAPI_PI / 2;
 
 		float x1 = cx + cosf(angle1) * radius;
 		float y1 = cy + sinf(angle1) * radius;
@@ -341,11 +405,12 @@ void bapi_fill_polygon(float cx, float cy, float radius, int sides, bapi_color_t
 	}
 }
 
-void bapi_draw_image(const char* filepath, float x, float y, float w, float h)
+void bapi_draw_image(const char *filepath, float x, float y, float w, float h)
 {
-	const plat_interface_t* plat = plat_get();
+	const plat_interface_t *plat	 = plat_get();
+	plat_renderer_t			renderer = bapi_internal_get_renderer();
 
-	plat_surface_t* surface = plat->load_image(filepath);
+	plat_surface_t *surface = plat->load_image(filepath);
 	if (surface == NULL) {
 		return;
 	}

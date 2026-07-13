@@ -6,23 +6,21 @@
 #include <stdlib.h>
 #include <string.h>
 
-
-
 struct plat_window {
-	SDL_Window* window;
+	SDL_Window *window;
 };
 
 struct plat_renderer {
-	SDL_Renderer* renderer;
+	SDL_Renderer *renderer;
 };
 
 struct plat_texture {
-	SDL_Texture* texture;
+	SDL_Texture *texture;
 };
 
 struct plat_font {
-	TTF_Font* font;
-	float size;
+	TTF_Font *font;
+	float	  size;
 };
 
 struct plat_audio_device {
@@ -30,40 +28,174 @@ struct plat_audio_device {
 };
 
 struct plat_audio_stream {
-	SDL_AudioStream* stream;
+	SDL_AudioStream *stream;
 };
 
 struct plat_mutex {
-	SDL_Mutex* mutex;
+	SDL_Mutex *mutex;
 };
 
 struct plat_surface {
-	SDL_Surface* surface;
+	SDL_Surface *surface;
 };
 
-
-
 static uint8_t sdlkeycode_convert_table[0x80] = {
-	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', '\b', PLAT_KEY_TAB, ' ', ' ', ' ', ' ', ' ', ' ',
-	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', PLAT_KEY_ESC, ' ', ' ', ' ', ' ',
-	' ', '!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-', '.', '/',
-	'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '<', '=', '>', '?',
-	'@', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
-	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', '[', '\\', ']', '^', '_',
-	'`', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',
-	'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '{', '|', '}', '~', ' ',
+	' ', ' ', ' ',	' ', ' ', ' ', ' ', ' ', '\b', PLAT_KEY_TAB, ' ', ' ', ' ',			 ' ', ' ',
+	' ', ' ', ' ',	' ', ' ', ' ', ' ', ' ', ' ',  ' ',			 ' ', ' ', PLAT_KEY_ESC, ' ', ' ',
+	' ', ' ', ' ',	'!', '"', '#', '$', '%', '&',  '\'',		 '(', ')', '*',			 '+', ',',
+	'-', '.', '/',	'0', '1', '2', '3', '4', '5',  '6',			 '7', '8', '9',			 ':', ';',
+	'<', '=', '>',	'?', '@', ' ', ' ', ' ', ' ',  ' ',			 ' ', ' ', ' ',			 ' ', ' ',
+	' ', ' ', ' ',	' ', ' ', ' ', ' ', ' ', ' ',  ' ',			 ' ', ' ', ' ',			 ' ', ' ',
+	' ', '[', '\\', ']', '^', '_', '`', 'a', 'b',  'c',			 'd', 'e', 'f',			 'g', 'h',
+	'i', 'j', 'k',	'l', 'm', 'n', 'o', 'p', 'q',  'r',			 's', 't', 'u',			 'v', 'w',
+	'x', 'y', 'z',	'{', '|', '}', '~', ' ',
 };
 
 static uint8_t sdlspkeycode_convert_table[0x90] = {
-	PLAT_KEY_CAPS, PLAT_KEY_F1, PLAT_KEY_F2, PLAT_KEY_F3, PLAT_KEY_F4, PLAT_KEY_F5, PLAT_KEY_F6, PLAT_KEY_F7, PLAT_KEY_F8, PLAT_KEY_F9, PLAT_KEY_F10, PLAT_KEY_F11, PLAT_KEY_F12, ' ', PLAT_KEY_SCROLL, ' ',
-	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', PLAT_KEY_NUML, '/', '*', '-', '+',
-	'\n', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
-	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
-	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
-	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
-	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
-	' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ',
-	' ', ' ', ' ', ' ', ' ', PLAT_KEY_CTRL, PLAT_KEY_SHIFT, PLAT_KEY_ALT, ' ', PLAT_KEY_CTRL, PLAT_KEY_SHIFT, PLAT_KEY_ALT, ' ', ' ', ' ', ' ',
+	PLAT_KEY_CAPS,
+	PLAT_KEY_F1,
+	PLAT_KEY_F2,
+	PLAT_KEY_F3,
+	PLAT_KEY_F4,
+	PLAT_KEY_F5,
+	PLAT_KEY_F6,
+	PLAT_KEY_F7,
+	PLAT_KEY_F8,
+	PLAT_KEY_F9,
+	PLAT_KEY_F10,
+	PLAT_KEY_F11,
+	PLAT_KEY_F12,
+	' ',
+	PLAT_KEY_SCROLL,
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	PLAT_KEY_NUML,
+	'/',
+	'*',
+	'-',
+	'+',
+	'\n',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	' ',
+	PLAT_KEY_CTRL,
+	PLAT_KEY_SHIFT,
+	PLAT_KEY_ALT,
+	' ',
+	PLAT_KEY_CTRL,
+	PLAT_KEY_SHIFT,
+	PLAT_KEY_ALT,
+	' ',
+	' ',
+	' ',
+	' ',
 };
 
 static uint8_t convert_sdl_keycode(SDL_Keycode key)
@@ -74,8 +206,6 @@ static uint8_t convert_sdl_keycode(SDL_Keycode key)
 		return sdlspkeycode_convert_table[key - 0x40000039u];
 	}
 }
-
-
 
 static int sdl3_init(uint32_t flags)
 {
@@ -90,9 +220,7 @@ static void sdl3_quit(void)
 	SDL_Quit();
 }
 
-
-
-static plat_window_t sdl3_create_window(const char* title, int width, int height)
+static plat_window_t sdl3_create_window(const char *title, int width, int height)
 {
 	plat_window_t w = malloc(sizeof(struct plat_window));
 	if (!w) return NULL;
@@ -111,8 +239,6 @@ static void sdl3_destroy_window(plat_window_t window)
 		free(window);
 	}
 }
-
-
 
 static plat_renderer_t sdl3_create_renderer(plat_window_t window)
 {
@@ -135,7 +261,8 @@ static void sdl3_destroy_renderer(plat_renderer_t renderer)
 	}
 }
 
-static void sdl3_set_render_draw_color(plat_renderer_t renderer, uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+static void sdl3_set_render_draw_color(plat_renderer_t renderer, uint8_t r, uint8_t g, uint8_t b,
+									   uint8_t a)
 {
 	if (renderer) SDL_SetRenderDrawColor(renderer->renderer, r, g, b, a);
 }
@@ -182,17 +309,16 @@ static void sdl3_render_fill_rect(plat_renderer_t renderer, float x, float y, fl
 	SDL_RenderFillRect(renderer->renderer, &rect);
 }
 
-static void sdl3_render_texture(plat_renderer_t renderer, plat_texture_t texture,
-				float x, float y, float w, float h)
+static void sdl3_render_texture(plat_renderer_t renderer, plat_texture_t texture, float x, float y,
+								float w, float h)
 {
 	if (!renderer || !texture) return;
 	SDL_FRect dest = {x, y, w, h};
 	SDL_RenderTexture(renderer->renderer, texture->texture, NULL, &dest);
 }
 
-
-
-static plat_texture_t sdl3_create_texture_from_surface(plat_renderer_t renderer, plat_surface_t* surface)
+static plat_texture_t sdl3_create_texture_from_surface(plat_renderer_t renderer,
+													   plat_surface_t *surface)
 {
 	if (!renderer || !surface) return NULL;
 	plat_texture_t t = malloc(sizeof(struct plat_texture));
@@ -205,10 +331,8 @@ static plat_texture_t sdl3_create_texture_from_surface(plat_renderer_t renderer,
 	return t;
 }
 
-static plat_texture_t sdl3_create_texture(plat_renderer_t renderer,
-					   plat_pixel_format_t format,
-					   plat_texture_access_t access,
-					   int width, int height)
+static plat_texture_t sdl3_create_texture(plat_renderer_t renderer, plat_pixel_format_t format,
+										  plat_texture_access_t access, int width, int height)
 {
 	if (!renderer) return NULL;
 	SDL_PixelFormat sdl_fmt = SDL_PIXELFORMAT_ARGB8888;
@@ -227,7 +351,7 @@ static plat_texture_t sdl3_create_texture(plat_renderer_t renderer,
 	return t;
 }
 
-static int sdl3_update_texture(plat_texture_t texture, const void* pixels, int pitch)
+static int sdl3_update_texture(plat_texture_t texture, const void *pixels, int pitch)
 {
 	if (!texture) return -1;
 	return SDL_UpdateTexture(texture->texture, NULL, pixels, pitch) ? 0 : -1;
@@ -241,11 +365,9 @@ static void sdl3_destroy_texture(plat_texture_t texture)
 	}
 }
 
-
-
-static plat_surface_t* sdl3_load_image(const char* filepath)
+static plat_surface_t *sdl3_load_image(const char *filepath)
 {
-	plat_surface_t* s = malloc(sizeof(plat_surface_t));
+	plat_surface_t *s = malloc(sizeof(plat_surface_t));
 	if (!s) return NULL;
 	s->surface = IMG_Load(filepath);
 	if (!s->surface) {
@@ -255,7 +377,7 @@ static plat_surface_t* sdl3_load_image(const char* filepath)
 	return s;
 }
 
-static void sdl3_destroy_surface(plat_surface_t* surface)
+static void sdl3_destroy_surface(plat_surface_t *surface)
 {
 	if (surface) {
 		SDL_DestroySurface(surface->surface);
@@ -263,9 +385,7 @@ static void sdl3_destroy_surface(plat_surface_t* surface)
 	}
 }
 
-
-
-static int sdl3_poll_event(plat_event_t* event)
+static int sdl3_poll_event(plat_event_t *event)
 {
 	if (!event) return SDL_PollEvent(NULL);
 
@@ -276,44 +396,42 @@ static int sdl3_poll_event(plat_event_t* event)
 			event->type = PLAT_EVENT_QUIT;
 			return 1;
 		case SDL_EVENT_KEY_DOWN:
-			event->type = PLAT_EVENT_KEY_DOWN;
+			event->type			= PLAT_EVENT_KEY_DOWN;
 			event->data.key.key = convert_sdl_keycode(sdl_event.key.key);
 			return 1;
 		case SDL_EVENT_KEY_UP:
-			event->type = PLAT_EVENT_KEY_UP;
+			event->type			= PLAT_EVENT_KEY_UP;
 			event->data.key.key = convert_sdl_keycode(sdl_event.key.key);
 			return 1;
 		case SDL_EVENT_MOUSE_BUTTON_DOWN:
-			event->type = PLAT_EVENT_MOUSE_BUTTON_DOWN;
-			event->data.button.x = sdl_event.button.x;
-			event->data.button.y = sdl_event.button.y;
+			event->type				  = PLAT_EVENT_MOUSE_BUTTON_DOWN;
+			event->data.button.x	  = sdl_event.button.x;
+			event->data.button.y	  = sdl_event.button.y;
 			event->data.button.button = sdl_event.button.button;
 			return 1;
 		case SDL_EVENT_MOUSE_BUTTON_UP:
-			event->type = PLAT_EVENT_MOUSE_BUTTON_UP;
-			event->data.button.x = sdl_event.button.x;
-			event->data.button.y = sdl_event.button.y;
+			event->type				  = PLAT_EVENT_MOUSE_BUTTON_UP;
+			event->data.button.x	  = sdl_event.button.x;
+			event->data.button.y	  = sdl_event.button.y;
 			event->data.button.button = sdl_event.button.button;
 			return 1;
 		case SDL_EVENT_MOUSE_MOTION:
-			event->type = PLAT_EVENT_MOUSE_MOTION;
+			event->type			 = PLAT_EVENT_MOUSE_MOTION;
 			event->data.motion.x = sdl_event.motion.x;
 			event->data.motion.y = sdl_event.motion.y;
 			return 1;
 		default:
-			
+
 			continue;
 		}
 	}
 	return 0;
 }
 
-static void sdl3_get_mouse_state(float* x, float* y)
+static void sdl3_get_mouse_state(float *x, float *y)
 {
 	SDL_GetMouseState(x, y);
 }
-
-
 
 static int sdl3_init_ttf(void)
 {
@@ -325,7 +443,7 @@ static void sdl3_quit_ttf(void)
 	TTF_Quit();
 }
 
-static plat_font_t sdl3_open_font(const char* filepath, float size)
+static plat_font_t sdl3_open_font(const char *filepath, float size)
 {
 	plat_font_t f = malloc(sizeof(struct plat_font));
 	if (!f) return NULL;
@@ -346,13 +464,12 @@ static void sdl3_close_font(plat_font_t font)
 	}
 }
 
-static plat_surface_t* sdl3_render_text_blended(plat_font_t font,
-						const char* text, int len,
-						uint8_t r, uint8_t g, uint8_t b, uint8_t a)
+static plat_surface_t *sdl3_render_text_blended(plat_font_t font, const char *text, int len,
+												uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 {
 	if (!font) return NULL;
-	SDL_Color color = {r, g, b, a};
-	plat_surface_t* s = malloc(sizeof(plat_surface_t));
+	SDL_Color		color = {r, g, b, a};
+	plat_surface_t *s	  = malloc(sizeof(plat_surface_t));
 	if (!s) return NULL;
 	s->surface = TTF_RenderText_Blended(font->font, text, len, color);
 	if (!s->surface) {
@@ -362,21 +479,20 @@ static plat_surface_t* sdl3_render_text_blended(plat_font_t font,
 	return s;
 }
 
-static int sdl3_get_string_size(plat_font_t font, const char* text, int len, int* w, int* h)
+static int sdl3_get_string_size(plat_font_t font, const char *text, int len, int *w, int *h)
 {
 	if (!font) return -1;
 	return TTF_GetStringSize(font->font, text, len, w, h) ? 0 : -1;
 }
 
-
-
-static plat_audio_device_t sdl3_open_audio_device(plat_audio_format_t format, int channels, int freq)
+static plat_audio_device_t sdl3_open_audio_device(plat_audio_format_t format, int channels,
+												  int freq)
 {
 	SDL_AudioSpec spec;
 	SDL_zero(spec);
 	if (format == PLAT_AUDIO_F32) spec.format = SDL_AUDIO_F32;
 	spec.channels = channels;
-	spec.freq = freq;
+	spec.freq	  = freq;
 
 	plat_audio_device_t d = malloc(sizeof(struct plat_audio_device));
 	if (!d) return NULL;
@@ -396,14 +512,14 @@ static void sdl3_close_audio_device(plat_audio_device_t device)
 	}
 }
 
-static plat_audio_stream_t sdl3_create_audio_stream(const plat_audio_spec_t* spec)
+static plat_audio_stream_t sdl3_create_audio_stream(const plat_audio_spec_t *spec)
 {
 	if (!spec) return NULL;
 	SDL_AudioSpec sdl_spec;
 	SDL_zero(sdl_spec);
 	if (spec->format == PLAT_AUDIO_F32) sdl_spec.format = SDL_AUDIO_F32;
 	sdl_spec.channels = spec->channels;
-	sdl_spec.freq = spec->freq;
+	sdl_spec.freq	  = spec->freq;
 
 	plat_audio_stream_t s = malloc(sizeof(struct plat_audio_stream));
 	if (!s) return NULL;
@@ -415,13 +531,14 @@ static plat_audio_stream_t sdl3_create_audio_stream(const plat_audio_spec_t* spe
 	return s;
 }
 
-static plat_audio_stream_t sdl3_open_audio_device_stream(plat_audio_format_t format, int channels, int freq)
+static plat_audio_stream_t sdl3_open_audio_device_stream(plat_audio_format_t format, int channels,
+														 int freq)
 {
 	SDL_AudioSpec spec;
 	SDL_zero(spec);
 	if (format == PLAT_AUDIO_F32) spec.format = SDL_AUDIO_F32;
 	spec.channels = channels;
-	spec.freq = freq;
+	spec.freq	  = freq;
 
 	plat_audio_stream_t s = malloc(sizeof(struct plat_audio_stream));
 	if (!s) return NULL;
@@ -447,7 +564,7 @@ static void sdl3_destroy_audio_stream(plat_audio_stream_t stream)
 	}
 }
 
-static int sdl3_put_audio_stream_data(plat_audio_stream_t stream, const void* data, int len)
+static int sdl3_put_audio_stream_data(plat_audio_stream_t stream, const void *data, int len)
 {
 	if (!stream) return -1;
 	return SDL_PutAudioStreamData(stream->stream, data, len) ? 0 : -1;
@@ -481,29 +598,29 @@ static void sdl3_resume_audio_stream_device(plat_audio_stream_t stream)
 	if (stream) SDL_ResumeAudioStreamDevice(stream->stream);
 }
 
-static int sdl3_load_wav(const char* filepath, plat_audio_spec_t* spec, uint8_t** buffer, uint32_t* length)
+static int sdl3_load_wav(const char *filepath, plat_audio_spec_t *spec, uint8_t **buffer,
+						 uint32_t *length)
 {
 	if (!spec) return -1;
 	SDL_AudioSpec sdl_spec;
 	SDL_zero(sdl_spec);
-	uint8_t* wav_buffer;
+	uint8_t *wav_buffer;
 	uint32_t wav_length;
 	if (!SDL_LoadWAV(filepath, &sdl_spec, &wav_buffer, &wav_length)) {
 		return -1;
 	}
 
-	
 	if (sdl_spec.format != SDL_AUDIO_F32) {
 		SDL_AudioSpec dst_spec;
 		SDL_zero(dst_spec);
-		dst_spec.format = SDL_AUDIO_F32;
+		dst_spec.format	  = SDL_AUDIO_F32;
 		dst_spec.channels = sdl_spec.channels;
-		dst_spec.freq = sdl_spec.freq;
+		dst_spec.freq	  = sdl_spec.freq;
 
-		uint8_t* converted_buffer;
-		int converted_length;
-		if (!SDL_ConvertAudioSamples(&sdl_spec, wav_buffer, (int)wav_length,
-					     &dst_spec, &converted_buffer, &converted_length)) {
+		uint8_t *converted_buffer;
+		int		 converted_length;
+		if (!SDL_ConvertAudioSamples(&sdl_spec, wav_buffer, (int)wav_length, &dst_spec,
+									 &converted_buffer, &converted_length)) {
 			SDL_free(wav_buffer);
 			return -1;
 		}
@@ -515,18 +632,16 @@ static int sdl3_load_wav(const char* filepath, plat_audio_spec_t* spec, uint8_t*
 		*length = wav_length;
 	}
 
-	spec->format = PLAT_AUDIO_F32;
+	spec->format   = PLAT_AUDIO_F32;
 	spec->channels = sdl_spec.channels;
-	spec->freq = sdl_spec.freq;
+	spec->freq	   = sdl_spec.freq;
 	return 0;
 }
 
-static void sdl3_mem_free(void* ptr)
+static void sdl3_mem_free(void *ptr)
 {
 	SDL_free(ptr);
 }
-
-
 
 static plat_mutex_t sdl3_create_mutex(void)
 {
@@ -558,8 +673,6 @@ static void sdl3_unlock_mutex(plat_mutex_t mutex)
 	if (mutex) SDL_UnlockMutex(mutex->mutex);
 }
 
-
-
 static void sdl3_delay(uint32_t ms)
 {
 	SDL_Delay(ms);
@@ -570,9 +683,7 @@ static uint32_t sdl3_get_ticks(void)
 	return SDL_GetTicks();
 }
 
-
-
-static void sdl3_log_debug(const char* fmt, ...)
+static void sdl3_log_debug(const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
@@ -580,7 +691,7 @@ static void sdl3_log_debug(const char* fmt, ...)
 	va_end(args);
 }
 
-static void sdl3_log_info(const char* fmt, ...)
+static void sdl3_log_info(const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
@@ -588,7 +699,7 @@ static void sdl3_log_info(const char* fmt, ...)
 	va_end(args);
 }
 
-static void sdl3_log_warn(const char* fmt, ...)
+static void sdl3_log_warn(const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
@@ -596,7 +707,7 @@ static void sdl3_log_warn(const char* fmt, ...)
 	va_end(args);
 }
 
-static void sdl3_log_error(const char* fmt, ...)
+static void sdl3_log_error(const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
@@ -604,7 +715,7 @@ static void sdl3_log_error(const char* fmt, ...)
 	va_end(args);
 }
 
-static void sdl3_log_critical(const char* fmt, ...)
+static void sdl3_log_critical(const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
@@ -612,87 +723,85 @@ static void sdl3_log_critical(const char* fmt, ...)
 	va_end(args);
 }
 
-
-
 static const plat_interface_t sdl3_interface = {
-	
-	.init = sdl3_init,
-	.quit = sdl3_quit,
-
-	
-	.create_window = sdl3_create_window,
-	.destroy_window = sdl3_destroy_window,
-
-	
-	.create_renderer = sdl3_create_renderer,
-	.destroy_renderer = sdl3_destroy_renderer,
-	.set_render_draw_color = sdl3_set_render_draw_color,
-	.set_render_draw_blend_mode = sdl3_set_render_draw_blend_mode,
-	.render_clear = sdl3_render_clear,
-	.render_present = sdl3_render_present,
-	.render_point = sdl3_render_point,
-	.render_line = sdl3_render_line,
-	.render_rect = sdl3_render_rect,
-	.render_fill_rect = sdl3_render_fill_rect,
-	.render_texture = sdl3_render_texture,
-
-	
-	.create_texture_from_surface = sdl3_create_texture_from_surface,
-	.create_texture = sdl3_create_texture,
-	.update_texture = sdl3_update_texture,
-	.destroy_texture = sdl3_destroy_texture,
-
-	
-	.load_image = sdl3_load_image,
-	.destroy_surface = sdl3_destroy_surface,
-
-	
-	.poll_event = sdl3_poll_event,
-	.get_mouse_state = sdl3_get_mouse_state,
-
-	
-	.init_ttf = sdl3_init_ttf,
-	.quit_ttf = sdl3_quit_ttf,
-	.open_font = sdl3_open_font,
-	.close_font = sdl3_close_font,
-	.render_text_blended = sdl3_render_text_blended,
-	.get_string_size = sdl3_get_string_size,
-
-	
-	.open_audio_device = sdl3_open_audio_device,
-	.close_audio_device = sdl3_close_audio_device,
-	.create_audio_stream = sdl3_create_audio_stream,
-	.open_audio_device_stream = sdl3_open_audio_device_stream,
-	.bind_audio_stream = sdl3_bind_audio_stream,
-	.destroy_audio_stream = sdl3_destroy_audio_stream,
-	.put_audio_stream_data = sdl3_put_audio_stream_data,
-	.flush_audio_stream = sdl3_flush_audio_stream,
-	.get_audio_stream_queued = sdl3_get_audio_stream_queued,
-	.clear_audio_stream = sdl3_clear_audio_stream,
-	.set_audio_stream_gain = sdl3_set_audio_stream_gain,
-	.resume_audio_stream_device = sdl3_resume_audio_stream_device,
-	.load_wav = sdl3_load_wav,
-	.mem_free = sdl3_mem_free,
-
-	
-	.create_mutex = sdl3_create_mutex,
-	.destroy_mutex = sdl3_destroy_mutex,
-	.lock_mutex = sdl3_lock_mutex,
-	.unlock_mutex = sdl3_unlock_mutex,
-
-	
-	.delay = sdl3_delay,
-	.get_ticks = sdl3_get_ticks,
-
-	
-	.log_debug = sdl3_log_debug,
-	.log_info = sdl3_log_info,
-	.log_warn = sdl3_log_warn,
-	.log_error = sdl3_log_error,
-	.log_critical = sdl3_log_critical,
+	.core =
+		{
+			.init		  = sdl3_init,
+			.quit		  = sdl3_quit,
+			.delay		  = sdl3_delay,
+			.get_ticks	  = sdl3_get_ticks,
+			.log_debug	  = sdl3_log_debug,
+			.log_info	  = sdl3_log_info,
+			.log_warn	  = sdl3_log_warn,
+			.log_error	  = sdl3_log_error,
+			.log_critical = sdl3_log_critical,
+		},
+	.window =
+		{
+			.create_window	 = sdl3_create_window,
+			.destroy_window	 = sdl3_destroy_window,
+			.poll_event		 = sdl3_poll_event,
+			.get_mouse_state = sdl3_get_mouse_state,
+		},
+	.renderer =
+		{
+			.create_renderer			= sdl3_create_renderer,
+			.destroy_renderer			= sdl3_destroy_renderer,
+			.set_render_draw_color		= sdl3_set_render_draw_color,
+			.set_render_draw_blend_mode = sdl3_set_render_draw_blend_mode,
+			.render_clear				= sdl3_render_clear,
+			.render_present				= sdl3_render_present,
+			.render_point				= sdl3_render_point,
+			.render_line				= sdl3_render_line,
+			.render_rect				= sdl3_render_rect,
+			.render_fill_rect			= sdl3_render_fill_rect,
+			.render_texture				= sdl3_render_texture,
+		},
+	.texture =
+		{
+			.create_texture_from_surface = sdl3_create_texture_from_surface,
+			.create_texture				 = sdl3_create_texture,
+			.update_texture				 = sdl3_update_texture,
+			.destroy_texture			 = sdl3_destroy_texture,
+			.load_image					 = sdl3_load_image,
+			.destroy_surface			 = sdl3_destroy_surface,
+		},
+	.text =
+		{
+			.init_ttf			 = sdl3_init_ttf,
+			.quit_ttf			 = sdl3_quit_ttf,
+			.open_font			 = sdl3_open_font,
+			.close_font			 = sdl3_close_font,
+			.render_text_blended = sdl3_render_text_blended,
+			.get_string_size	 = sdl3_get_string_size,
+		},
+	.audio =
+		{
+			.open_audio_device			= sdl3_open_audio_device,
+			.close_audio_device			= sdl3_close_audio_device,
+			.create_audio_stream		= sdl3_create_audio_stream,
+			.open_audio_device_stream	= sdl3_open_audio_device_stream,
+			.bind_audio_stream			= sdl3_bind_audio_stream,
+			.destroy_audio_stream		= sdl3_destroy_audio_stream,
+			.put_audio_stream_data		= sdl3_put_audio_stream_data,
+			.flush_audio_stream			= sdl3_flush_audio_stream,
+			.get_audio_stream_queued	= sdl3_get_audio_stream_queued,
+			.clear_audio_stream			= sdl3_clear_audio_stream,
+			.set_audio_stream_gain		= sdl3_set_audio_stream_gain,
+			.resume_audio_stream_device = sdl3_resume_audio_stream_device,
+			.load_wav					= sdl3_load_wav,
+			.mem_free					= sdl3_mem_free,
+		},
+	.sync =
+		{
+			.create_mutex  = sdl3_create_mutex,
+			.destroy_mutex = sdl3_destroy_mutex,
+			.lock_mutex	   = sdl3_lock_mutex,
+			.unlock_mutex  = sdl3_unlock_mutex,
+		},
 };
 
-const plat_interface_t* plat_sdl3_interface(void)
+const plat_interface_t *plat_sdl3_interface(void)
 {
 	return &sdl3_interface;
 }

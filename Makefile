@@ -43,7 +43,7 @@ else
 endif
 
 # Source files (new directory layout)
-CORE_SOURCES := engine/platform/platform.c engine/master/init.c engine/master/version.c engine/render/draw.c
+CORE_SOURCES := engine/platform/platform.c engine/master/state.c engine/master/init.c engine/master/version.c engine/render/draw.c
 CORE_SOURCES += engine/text/text.c engine/log/log.c engine/mouse_drawing.c
 CORE_SOURCES += engine/button/button.c engine/scene/scene.c engine/level/level.c
 CORE_SOURCES += engine/xml/xml_loader.c engine/audio/audio.c
@@ -86,7 +86,7 @@ XJ380_INC_FLAGS := -I include \
     -I $(XJ380_SDK)/include \
     -I $(XJ380_SDK)/include/xposix
 XJ380_DEF_FLAGS := -DUSE_BACKEND_XJ380 -DBAPI_LOG_ENABLED -D__XJ380_OS__ -DXJ380_OS \
-    -DM_PI=3.14159265358979323846 -Dcosf=cos -Dsinf=sin -Dsqrtf=sqrt \
+    -Dcosf=cos -Dsinf=sin -Dsqrtf=sqrt \
     -Dabs=__xj380_abs
 
 
@@ -99,8 +99,9 @@ XJ380_CXX_FLAGS := -ffreestanding -fno-builtin -m64 -std=c++11 \
     -fno-stack-protector -fno-exceptions -fshort-wchar -nostdinc \
     -O -g -fPIC $(XJ380_INC_FLAGS) $(XJ380_DEF_FLAGS)
 
-XJ380_C_SOURCES := engine/platform/platform.c engine/master/init.c engine/master/version.c engine/render/draw.c
+XJ380_C_SOURCES := engine/platform/platform.c engine/master/state.c engine/master/init.c engine/master/version.c engine/render/draw.c
 XJ380_C_SOURCES += engine/text/text.c engine/log/log.c engine/mouse_drawing.c
+XJ380_C_SOURCES += engine/math/math.c engine/texture/texture.c engine/input/input.c engine/camera/camera.c
 XJ380_C_SOURCES += engine/button/button.c engine/scene/scene.c engine/level/level.c
 XJ380_C_SOURCES += engine/xml/xml_loader.c engine/audio/audio.c engine/video/video_stub.c
 XJ380_CPP_SOURCES := engine/platform/xj380/platform_xj380.cpp
@@ -141,7 +142,7 @@ main: $(MAIN_OBJS)
 	@$(CC) $(C_FLAGS) $(LD_FLAGS) $^ -o main$(EXE_EXT) $(LIBS)
 
 # Build text example
-text_example: text_example.o engine/master/init.o engine/render/create.o engine/text.o
+text_example: text_example.o $(LIB_OBJS)
 	@echo "LINK $^ -> text_example$(EXE_EXT)"
 	@$(CC) $(C_FLAGS) $(LD_FLAGS) $^ -o text_example$(EXE_EXT) $(LIBS)
 
@@ -167,7 +168,7 @@ check: $(C_SOURCES:%=%.tidy) $(S_SOURCES:%=%.tidy) $(HEADERS:%=%.tidy)
 clean:
 	@echo Removing $(LIB_OBJS) $(XJ380_OBJS) main.o main$(EXE_EXT) libbridgeengine$(LIB_EXT) libbridgeengine.a libbridgeengine_xj380.a text_example$(EXE_EXT)
 ifeq ($(OS),Windows_NT)
-	@del /f /q $(subst /,\,$(LIB_OBJS)) main.o main.exe libbridgeengine.so libbridgeengine.dll libbridgeengine.a text_example.exe 2>nul
+	@del /f /q $(subst /,\,$(LIB_OBJS)) main.o main.exe libbridgeengine.so libbridgeengine.dll libbridgeengine.a text_example.exe libbridgeengine_xj380.a bridgeengine_demo.epf $(subst /,\,$(XJ380_OBJS)) xj380_main.xj380.o 2>nul
 else
 	@rm -f $(LIB_OBJS) $(XJ380_C_OBJS) $(XJ380_CPP_OBJS)
 	@rm -f main.o main.xj380.o xj380_main.o main$(EXE_EXT) text_example$(EXE_EXT)

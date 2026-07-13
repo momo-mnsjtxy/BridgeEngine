@@ -1,0 +1,3 @@
+#pragma once
+
+#define BAPI_PI 3.14159265358979323846

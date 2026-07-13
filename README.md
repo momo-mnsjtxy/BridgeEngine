@@ -2,7 +2,7 @@
 
 ## 鹊桥引擎
 
-BridgeEngine 是一个基于 SDL3 + FFmpeg 的跨平台 2D 图形引擎，提供简洁的 C API，支持 Windows (PC) 和 XJ380 嵌入式平台。
+BridgeEngine 是一个跨平台 2D 图形引擎，提供简洁的 C API。桌面端使用 SDL3 + FFmpeg，XJ380 端使用原生 XAPI 后端。
 
 ---
 
@@ -11,16 +11,15 @@ BridgeEngine 是一个基于 SDL3 + FFmpeg 的跨平台 2D 图形引擎，提供
 | 模块 | 说明 |
 |------|------|
 | **渲染** | 点、线、矩形、圆、三角形、多边形等基本图元绘制 |
-| **文字** | 基于 SDL3_ttf，支持 TTF 字体、UTF-8 编码、中英文混排 |
+| **文字** | 桌面端基于 SDL3_ttf，支持 TTF 字体 |
 | **图像** | 加载和绘制 PNG/JPEG 等格式纹理 |
-| **音频** | WAV 音效加载播放，支持循环和音量控制 |
-| **视频** | 基于 FFmpeg 解码，支持 MP4/AVI/MKV 播放，自适应缩放 |
+| **音频** | 桌面端 WAV 音效加载播放，支持循环和音量控制 |
+| **视频** | 桌面端基于 FFmpeg 解码，支持 MP4/AVI/MKV 播放 |
 | **场景管理** | 多场景创建/切换，生命周期回调 |
 | **关卡管理** | 关卡加载/卸载，序列管理，上下级切换 |
 | **XML 配置** | 场景和关卡的 XML 文件加载与保存 |
-| **输入系统** | 键盘状态查询（按下/按住/释放），鼠标位置获取 |
+| **输入系统** | 键盘状态查询、鼠标位置获取 |
 | **摄像机** | 2D 摄像机，支持平移、缩放、世界坐标转换 |
-| **碰撞检测** | 圆与矩形相交检测 |
 | **数学工具** | 向量运算、插值、钳制等工具函数 |
 
 ---
@@ -32,10 +31,6 @@ BridgeEngine 是一个基于 SDL3 + FFmpeg 的跨平台 2D 图形引擎，提供
 - OpenGL (Linux) 或 opengl32 (Windows)
 - CMake >= 3.20 或 GNU Make
 - C11 编译器 (GCC/Clang/MSVC)
-
----
-
-## 快速开始
 
 ### 安装依赖
 
@@ -52,27 +47,62 @@ sudo apt install libsdl3-dev libsdl3-image-dev libsdl3-ttf-dev \
                  libswscale-dev libswresample-dev
 ```
 
-### 构建 (CMake)
+---
+
+## 构建
+
+### CMake
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -DBRIDGEENGINE_REQUIRE_DESKTOP_DEPS=ON
 cmake --build build
 ```
 
-### 构建 (Makefile)
+CMake 默认生成 `build/compile_commands.json`，并构建：
+
+- `bridgeengine_shared`
+- `bridgeengine_static`
+- `main`
+- `text_example`
+- `log_test`
+
+如果桌面依赖不完整且没有打开 `BRIDGEENGINE_REQUIRE_DESKTOP_DEPS`，CMake 仍会生成 `compile_commands.json`，但桌面库和示例会从默认构建中排除。
+
+### Makefile
 
 ```bash
-make          # 构建动态库 + 示例程序
-make lib      # 仅构建动态库 (libbridgeengine.dll / .so)
-make staticlib # 仅构建静态库 (libbridgeengine.a)
+make            # 构建动态库 + 示例程序
+make lib        # 仅构建动态库
+make staticlib  # 仅构建静态库
 ```
 
-### 构建 XJ380 嵌入式目标
+### XJ380
+
+XJ380 SDK 是本地依赖，不进入 Git。需要在仓库根目录提供：
+
+```text
+XJ380_XACT_2026v4_xj380/depend/include
+XJ380_XACT_2026v4_xj380/depend/obj-gui
+```
+
+构建目标：
 
 ```bash
-make xj380_staticlib  # XJ380 静态库
-make xj380_epf        # XJ380 EPF 可执行文件
+cmake --build build --target xj380_staticlib
+cmake --build build --target xj380_epf
+
+# 或使用 Makefile
+make xj380_staticlib
+make xj380_epf
 ```
+
+---
+
+## 后端说明
+
+桌面 SDL3 后端使用 SDL3_ttf 加载字体文件，并通过 FFmpeg 实现视频。
+
+XJ380 后端使用 XAPI 内置文本绘制，当前不加载 TTF 文件。XJ380 用户态头文件里的 `WSTR` 实际是 `char *`，BridgeEngine 不把它当作 UTF-16 或 `wchar_t`。XJ380 音频和视频后端目前尚未实现。
 
 ---
 
@@ -110,55 +140,24 @@ int main(void) {
 
 ## 项目结构
 
-```
+```text
 BridgeEngine/
 ├── include/            # 公共头文件
-│   ├── BridgeEngine.h  # 统一入口
-│   ├── bapi.h          # API 声明
-│   ├── bapi_types.h    # 类型定义
-│   ├── audio/          # 音频 API
-│   ├── video/          # 视频 API
-│   ├── text/           # 文字 API
-│   ├── render/         # 渲染 API
-│   ├── input/          # 输入 API
-│   ├── camera/         # 摄像机 API
-│   ├── math/           # 数学 API
-│   ├── texture/        # 纹理 API
-│   ├── scene/          # 场景 API
-│   ├── level/          # 关卡 API
-│   ├── button/         # 按钮 API
-│   └── ...
 ├── engine/             # 引擎实现
 │   ├── platform/       # 平台层 (SDL3 / XJ380)
 │   ├── render/         # 渲染实现
-│   ├── video/          # 视频实现 (FFmpeg)
+│   ├── video/          # 视频实现
 │   ├── audio/          # 音频实现
 │   ├── text/           # 文字实现
 │   └── ...
 ├── cmake/              # CMake 模块
-│   └── FindFFmpeg.cmake
 ├── main.c              # 功能演示程序
 ├── CMakeLists.txt
 ├── Makefile
 └── BAPI_README.md      # 详细 API 文档
 ```
 
----
-
-## API 文档
-
-完整的 API 文档请查阅 [BAPI_README.md](BAPI_README.md)。
-
----
-
-## 平台支持
-
-| 平台 | 后端 | 状态 |
-|------|------|------|
-| Windows (x64) | SDL3 + OpenGL | 支持 |
-| Linux | SDL3 + OpenGL | 支持 |
-| macOS | SDL3 + OpenGL | 支持 |
-| XJ380 嵌入式 | 原生 XAPI | 支持 (交叉编译) |
+完整 API 文档请查阅 [BAPI_README.md](BAPI_README.md)。
 
 ---
 
