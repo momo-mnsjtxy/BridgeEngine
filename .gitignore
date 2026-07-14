@@ -39,8 +39,8 @@ bld/
 *.dll
 *.exe
 *.epf
-main
-text_example
+bridgeengine_desktop_example
+bridgeengine_text_example
 libbridgeengine.so
 libbridgeengine.dll
 libbridgeengine.a
@@ -401,12 +401,12 @@ CMakeUserPresets.json
 !cmake/FindFFmpeg.cmake
 
 # Compiled artifacts (platform-specific)
-main.exe
-main
-text_example.exe
-text_example
-log_test.exe
-log_test
+bridgeengine_desktop_example.exe
+bridgeengine_desktop_example
+bridgeengine_text_example.exe
+bridgeengine_text_example
+bridgeengine_log_example.exe
+bridgeengine_log_example
 bridgeengine_demo
 bridgeengine_demo.exe
 libbridgeengine.*

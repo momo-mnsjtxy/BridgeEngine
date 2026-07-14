@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(BridgeEngine VERSION 0.1.0 LANGUAGES C CXX)
+project(BridgeEngine VERSION 2.0.0 LANGUAGES C CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Generate compile_commands.json" FORCE)
@@ -9,7 +9,7 @@ option(BRIDGEENGINE_BUILD_SHARED "Build the shared BridgeEngine library" ON)
 option(BRIDGEENGINE_BUILD_STATIC "Build the static BridgeEngine library" ON)
 option(BRIDGEENGINE_BUILD_EXAMPLES "Build BridgeEngine example executables" ON)
 option(BRIDGEENGINE_BUILD_XJ380 "Enable XJ380 custom build targets" ON)
-option(BRIDGEENGINE_REQUIRE_DESKTOP_DEPS "Require SDL3, SDL3_image, SDL3_ttf, and FFmpeg at configure time" OFF)
+option(BRIDGEENGINE_BUILD_TESTS "Build BridgeEngine regression tests" ON)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -19,34 +19,40 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+configure_file(
+	"${CMAKE_CURRENT_SOURCE_DIR}/cmake/bridgeengine_version.h.in"
+	"${CMAKE_CURRENT_BINARY_DIR}/generated/bridgeengine_version.h"
+	@ONLY
+)
+
 set(BRIDGEENGINE_PLATFORM_SOURCES
-	engine/platform/platform.c
-	engine/platform/sdl3/platform_sdl3.c
+	src/platform/platform.c
+	src/platform/sdl3/platform_sdl3.c
 )
 set(BRIDGEENGINE_CORE_SOURCES
-	engine/master/state.c
-	engine/master/init.c
-	engine/master/version.c
-	engine/log/log.c
+	src/core/render_context.c
+	src/core/init.c
+	src/core/version.c
+	src/log.c
 )
 set(BRIDGEENGINE_RENDER_SOURCES
-	engine/render/draw.c
-	engine/mouse_drawing.c
-	engine/text/text.c
-	engine/math/math.c
-	engine/texture/texture.c
-	engine/input/input.c
-	engine/camera/camera.c
+	src/draw.c
+	src/input/mouse_drawing.c
+	src/text.c
+	src/math.c
+	src/texture.c
+	src/input/input.c
+	src/camera.c
 )
 set(BRIDGEENGINE_UI_SOURCES
-	engine/button/button.c
-	engine/scene/scene.c
-	engine/level/level.c
-	engine/xml/xml_loader.c
+	src/button.c
+	src/scene.c
+	src/level.c
+	src/xml_loader.c
 )
 set(BRIDGEENGINE_MEDIA_SOURCES
-	engine/audio/audio.c
-	engine/video/video.c
+	src/audio.c
+	src/video/video.c
 )
 set(BRIDGEENGINE_SOURCES
 	${BRIDGEENGINE_PLATFORM_SOURCES}
@@ -57,63 +63,25 @@ set(BRIDGEENGINE_SOURCES
 )
 
 if(BRIDGEENGINE_BUILD_SHARED OR BRIDGEENGINE_BUILD_STATIC OR BRIDGEENGINE_BUILD_EXAMPLES)
-	set(BRIDGEENGINE_DESKTOP_DEPS_FOUND TRUE)
 	find_package(PkgConfig QUIET)
 
 	if(WIN32)
-		if(BRIDGEENGINE_REQUIRE_DESKTOP_DEPS)
-			find_package(SDL3 CONFIG REQUIRED)
-			find_package(SDL3_image CONFIG REQUIRED)
-			find_package(SDL3_ttf CONFIG REQUIRED)
-			find_package(FFmpeg REQUIRED)
-		else()
-			find_package(SDL3 CONFIG QUIET)
-			find_package(SDL3_image CONFIG QUIET)
-			find_package(SDL3_ttf CONFIG QUIET)
-			find_package(FFmpeg QUIET)
-		endif()
-		if(NOT TARGET SDL3::SDL3 OR NOT TARGET SDL3_image::SDL3_image OR NOT TARGET SDL3_ttf::SDL3_ttf OR NOT FFmpeg_FOUND)
-			set(BRIDGEENGINE_DESKTOP_DEPS_FOUND FALSE)
-		endif()
+		find_package(SDL3 CONFIG REQUIRED)
+		find_package(SDL3_image CONFIG REQUIRED)
+		find_package(SDL3_ttf CONFIG REQUIRED)
+		find_package(FFmpeg REQUIRED)
 
 		set(BRIDGEENGINE_PLATFORM_LIBS
-			$<$<TARGET_EXISTS:SDL3::SDL3>:SDL3::SDL3>
-			$<$<TARGET_EXISTS:SDL3_image::SDL3_image>:SDL3_image::SDL3_image>
-			$<$<TARGET_EXISTS:SDL3_ttf::SDL3_ttf>:SDL3_ttf::SDL3_ttf>
-			$<$<TARGET_EXISTS:FFmpeg::avcodec>:FFmpeg::avcodec>
-			$<$<TARGET_EXISTS:FFmpeg::avformat>:FFmpeg::avformat>
-			$<$<TARGET_EXISTS:FFmpeg::avutil>:FFmpeg::avutil>
-			$<$<TARGET_EXISTS:FFmpeg::swscale>:FFmpeg::swscale>
-			$<$<TARGET_EXISTS:FFmpeg::swresample>:FFmpeg::swresample>
+			SDL3::SDL3 SDL3_image::SDL3_image SDL3_ttf::SDL3_ttf
+			FFmpeg::avcodec FFmpeg::avformat FFmpeg::avutil FFmpeg::swscale FFmpeg::swresample
 			opengl32 gdi32 user32 kernel32 shell32
 		)
 		set(BRIDGEENGINE_PLATFORM_INCLUDES ${FFmpeg_INCLUDE_DIRS})
 	else()
-		if(BRIDGEENGINE_REQUIRE_DESKTOP_DEPS)
-			set(BRIDGEENGINE_PKG_REQUIRED REQUIRED)
-		else()
-			set(BRIDGEENGINE_PKG_REQUIRED)
-		endif()
-		pkg_check_modules(SDL3 ${BRIDGEENGINE_PKG_REQUIRED} sdl3)
-		pkg_check_modules(SDL3_IMAGE ${BRIDGEENGINE_PKG_REQUIRED} sdl3-image)
-		pkg_check_modules(SDL3_TTF ${BRIDGEENGINE_PKG_REQUIRED} sdl3-ttf)
-		pkg_check_modules(FFMPEG ${BRIDGEENGINE_PKG_REQUIRED} libavcodec libavformat libavutil libswscale libswresample)
-		if(NOT SDL3_FOUND OR NOT SDL3_IMAGE_FOUND OR NOT SDL3_TTF_FOUND OR NOT FFMPEG_FOUND)
-			set(BRIDGEENGINE_DESKTOP_DEPS_FOUND FALSE)
-		endif()
-
-		if(NOT SDL3_LIBRARIES)
-			set(SDL3_LIBRARIES SDL3)
-		endif()
-		if(NOT SDL3_IMAGE_LIBRARIES)
-			set(SDL3_IMAGE_LIBRARIES SDL3_image)
-		endif()
-		if(NOT SDL3_TTF_LIBRARIES)
-			set(SDL3_TTF_LIBRARIES SDL3_ttf)
-		endif()
-		if(NOT FFMPEG_LIBRARIES)
-			set(FFMPEG_LIBRARIES avcodec avformat avutil swscale swresample)
-		endif()
+		pkg_check_modules(SDL3 REQUIRED sdl3)
+		pkg_check_modules(SDL3_IMAGE REQUIRED sdl3-image)
+		pkg_check_modules(SDL3_TTF REQUIRED sdl3-ttf)
+		pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libavutil libswscale libswresample)
 
 		set(BRIDGEENGINE_PLATFORM_LIBS
 			${SDL3_LIBRARIES}
@@ -136,17 +104,16 @@ if(BRIDGEENGINE_BUILD_SHARED OR BRIDGEENGINE_BUILD_STATIC OR BRIDGEENGINE_BUILD_
 			${FFMPEG_LIBRARY_DIRS}
 		)
 	endif()
-	if(NOT BRIDGEENGINE_DESKTOP_DEPS_FOUND AND NOT BRIDGEENGINE_REQUIRE_DESKTOP_DEPS)
-		message(WARNING "Desktop SDL/FFmpeg dependencies are incomplete. Desktop library targets are generated for compile_commands.json but excluded from the default build. Install SDL3_image and SDL3_ttf development packages, or configure with -DBRIDGEENGINE_REQUIRE_DESKTOP_DEPS=ON to fail early.")
-	endif()
 endif()
 
 function(bridgeengine_configure_target target_name)
 	target_include_directories(${target_name}
 		PUBLIC
 			$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+			$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
 			$<INSTALL_INTERFACE:include>
 		PRIVATE
+			${CMAKE_CURRENT_SOURCE_DIR}/src
 			${BRIDGEENGINE_PLATFORM_INCLUDES}
 	)
 	target_compile_definitions(${target_name} PRIVATE BAPI_LOG_ENABLED)
@@ -161,55 +128,114 @@ function(bridgeengine_configure_target target_name)
 endfunction()
 
 function(bridgeengine_copy_runtime_assets target_name)
-	foreach(asset_dir IN ITEMS audio_example video_example image_example text)
-		if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${asset_dir}")
-			add_custom_command(TARGET ${target_name} POST_BUILD
-				COMMAND ${CMAKE_COMMAND} -E copy_directory
-					"${CMAKE_CURRENT_SOURCE_DIR}/${asset_dir}"
-					"$<TARGET_FILE_DIR:${target_name}>/${asset_dir}"
-			)
-		endif()
-	endforeach()
+	if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/assets")
+		add_custom_command(TARGET ${target_name} POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_directory
+				"${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
+				"$<TARGET_FILE_DIR:${target_name}>/assets"
+		)
+	endif()
 endfunction()
 
-set(BRIDGEENGINE_DESKTOP_TARGET_SCOPE)
-if(DEFINED BRIDGEENGINE_DESKTOP_DEPS_FOUND AND NOT BRIDGEENGINE_DESKTOP_DEPS_FOUND)
-	set(BRIDGEENGINE_DESKTOP_TARGET_SCOPE EXCLUDE_FROM_ALL)
+if(BRIDGEENGINE_BUILD_TESTS)
+	enable_testing()
+	add_executable(bridgeengine_public_header_c_test tests/public_header_c_test.c)
+	target_include_directories(bridgeengine_public_header_c_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+	)
+	add_test(NAME bridgeengine.public_header_c COMMAND bridgeengine_public_header_c_test)
+
+	add_executable(bridgeengine_public_header_cpp_test tests/public_header_cpp_test.cpp)
+	target_include_directories(bridgeengine_public_header_cpp_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+	)
+	add_test(NAME bridgeengine.public_header_cpp COMMAND bridgeengine_public_header_cpp_test)
+
+	add_executable(bridgeengine_scene_level_xml_test
+		tests/scene_level_xml_test.c
+		src/scene.c
+		src/level.c
+		src/xml_loader.c
+	)
+	target_include_directories(bridgeengine_scene_level_xml_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.scene_level_xml
+		COMMAND bridgeengine_scene_level_xml_test "${CMAKE_CURRENT_BINARY_DIR}"
+	)
+
+	add_executable(bridgeengine_texture_test
+		tests/texture_test.c
+		src/texture.c
+		src/platform/platform.c
+	)
+	target_include_directories(bridgeengine_texture_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.texture COMMAND bridgeengine_texture_test)
+
+	add_executable(bridgeengine_lifecycle_test
+		tests/lifecycle_test.c
+		src/core/render_context.c
+		src/platform/platform.c
+	)
+	target_include_directories(bridgeengine_lifecycle_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.lifecycle COMMAND bridgeengine_lifecycle_test)
+
+	add_executable(bridgeengine_text_asset_test
+		tests/text_asset_test.c
+		src/text.c
+		src/platform/platform.c
+	)
+	target_include_directories(bridgeengine_text_asset_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.text_assets COMMAND bridgeengine_text_asset_test)
 endif()
 
 if(BRIDGEENGINE_BUILD_SHARED)
-	add_library(bridgeengine_shared SHARED ${BRIDGEENGINE_DESKTOP_TARGET_SCOPE} ${BRIDGEENGINE_SOURCES})
+	add_library(bridgeengine_shared SHARED ${BRIDGEENGINE_SOURCES})
 	set_target_properties(bridgeengine_shared PROPERTIES OUTPUT_NAME bridgeengine)
 	bridgeengine_configure_target(bridgeengine_shared)
 	add_library(BridgeEngine::shared ALIAS bridgeengine_shared)
 endif()
 
 if(BRIDGEENGINE_BUILD_STATIC)
-	add_library(bridgeengine_static STATIC ${BRIDGEENGINE_DESKTOP_TARGET_SCOPE} ${BRIDGEENGINE_SOURCES})
+	add_library(bridgeengine_static STATIC ${BRIDGEENGINE_SOURCES})
 	set_target_properties(bridgeengine_static PROPERTIES OUTPUT_NAME bridgeengine)
 	bridgeengine_configure_target(bridgeengine_static)
 	add_library(BridgeEngine::static ALIAS bridgeengine_static)
 endif()
 
-if(BRIDGEENGINE_BUILD_EXAMPLES AND (NOT DEFINED BRIDGEENGINE_DESKTOP_DEPS_FOUND OR BRIDGEENGINE_DESKTOP_DEPS_FOUND))
+if(BRIDGEENGINE_BUILD_EXAMPLES)
 	set(BRIDGEENGINE_EXAMPLE_LINK_TARGET bridgeengine_static)
 	if(NOT TARGET bridgeengine_static)
 		set(BRIDGEENGINE_EXAMPLE_LINK_TARGET bridgeengine_shared)
 	endif()
 
-	add_executable(main main.c)
-	target_link_libraries(main PRIVATE ${BRIDGEENGINE_EXAMPLE_LINK_TARGET})
-	bridgeengine_copy_runtime_assets(main)
+	add_executable(bridgeengine_desktop_example examples/desktop/main.c)
+	target_link_libraries(bridgeengine_desktop_example PRIVATE ${BRIDGEENGINE_EXAMPLE_LINK_TARGET})
+	bridgeengine_copy_runtime_assets(bridgeengine_desktop_example)
 
-	add_executable(text_example text_example.c)
-	target_link_libraries(text_example PRIVATE ${BRIDGEENGINE_EXAMPLE_LINK_TARGET})
-	bridgeengine_copy_runtime_assets(text_example)
+	add_executable(bridgeengine_text_example examples/text/text_example.c)
+	target_link_libraries(bridgeengine_text_example PRIVATE ${BRIDGEENGINE_EXAMPLE_LINK_TARGET})
+	bridgeengine_copy_runtime_assets(bridgeengine_text_example)
 
-	add_executable(log_test log_test.c)
-	target_link_libraries(log_test PRIVATE ${BRIDGEENGINE_EXAMPLE_LINK_TARGET})
-	bridgeengine_copy_runtime_assets(log_test)
-elseif(BRIDGEENGINE_BUILD_EXAMPLES)
-	message(WARNING "Skipping desktop examples because SDL/FFmpeg dependencies are incomplete.")
+	add_executable(bridgeengine_log_example examples/log/log_test.c)
+	target_link_libraries(bridgeengine_log_example PRIVATE ${BRIDGEENGINE_EXAMPLE_LINK_TARGET})
+	bridgeengine_copy_runtime_assets(bridgeengine_log_example)
 endif()
 
 if(BRIDGEENGINE_BUILD_XJ380)
@@ -219,32 +245,33 @@ if(BRIDGEENGINE_BUILD_XJ380)
 	set(XJ380_LD ld CACHE FILEPATH "XJ380 linker")
 
 	set(XJ380_C_SOURCES
-		engine/platform/platform.c
-		engine/master/state.c
-		engine/master/init.c
-		engine/master/version.c
-		engine/log/log.c
-		engine/render/draw.c
-		engine/mouse_drawing.c
-		engine/text/text.c
-		engine/math/math.c
-		engine/texture/texture.c
-		engine/input/input.c
-		engine/camera/camera.c
-		engine/button/button.c
-		engine/scene/scene.c
-		engine/level/level.c
-		engine/xml/xml_loader.c
-		engine/audio/audio.c
-		engine/video/video_stub.c
+		src/platform/platform.c
+		src/core/render_context.c
+		src/core/init.c
+		src/core/version.c
+		src/log.c
+		src/draw.c
+		src/input/mouse_drawing.c
+		src/text.c
+		src/math.c
+		src/texture.c
+		src/input/input.c
+		src/camera.c
+		src/button.c
+		src/scene.c
+		src/level.c
+		src/xml_loader.c
+		src/audio.c
+		src/video/video_stub.c
 	)
-	set(XJ380_CPP_SOURCES engine/platform/xj380/platform_xj380.cpp)
+	set(XJ380_CPP_SOURCES src/platform/xj380/platform_xj380.cpp)
 	set(XJ380_OBJECTS)
 
 	set(XJ380_COMMON_FLAGS
 		-ffreestanding -fno-builtin -m64 -fno-stack-protector -fshort-wchar
 		-nostdinc -O -g -fPIC
 		-I${CMAKE_CURRENT_SOURCE_DIR}/include
+		-I${CMAKE_CURRENT_SOURCE_DIR}/src
 		-I${XJ380_SDK}/include
 		-I${XJ380_SDK}/include/xposix
 		-DUSE_BACKEND_XJ380 -DBAPI_LOG_ENABLED -D__XJ380_OS__ -DXJ380_OS
@@ -300,8 +327,8 @@ if(BRIDGEENGINE_BUILD_XJ380)
 	add_custom_command(
 		OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/xj380/xj380_main.xj380.o"
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/xj380"
-		COMMAND ${XJ380_CC} ${XJ380_COMMON_FLAGS} -std=c11 -c -o "${CMAKE_CURRENT_BINARY_DIR}/xj380/xj380_main.xj380.o" "${CMAKE_CURRENT_SOURCE_DIR}/xj380_main.c"
-		DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/xj380_main.c" check_xj380_sdk
+		COMMAND ${XJ380_CC} ${XJ380_COMMON_FLAGS} -std=c11 -c -o "${CMAKE_CURRENT_BINARY_DIR}/xj380/xj380_main.xj380.o" "${CMAKE_CURRENT_SOURCE_DIR}/examples/xj380/xj380_main.c"
+		DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/examples/xj380/xj380_main.c" check_xj380_sdk
 		VERBATIM
 	)
 	add_custom_command(
@@ -328,4 +355,5 @@ if(BRIDGEENGINE_INSTALL_TARGETS)
 		RUNTIME DESTINATION bin
 	)
 endif()
-install(DIRECTORY include/ DESTINATION include)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include/BridgeEngine.h" DESTINATION include)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/bridgeengine_version.h" DESTINATION include)

@@ -29,7 +29,7 @@ BridgeEngine 是一个跨平台 2D 图形引擎，提供简洁的 C API。桌面
 - SDL3 + SDL3_image + SDL3_ttf
 - FFmpeg (libavcodec, libavformat, libavutil, libswscale, libswresample)
 - OpenGL (Linux) 或 opengl32 (Windows)
-- CMake >= 3.20 或 GNU Make
+- CMake >= 3.20
 - C11 编译器 (GCC/Clang/MSVC)
 
 ### 安装依赖
@@ -54,27 +54,21 @@ sudo apt install libsdl3-dev libsdl3-image-dev libsdl3-ttf-dev \
 ### CMake
 
 ```bash
-cmake -S . -B build -DBRIDGEENGINE_REQUIRE_DESKTOP_DEPS=ON
-cmake --build build
+cmake --preset default
+cmake --build --preset default
 ```
+
+预设使用 Ninja，并将默认构建目录固定为 `build/`。若此前用其他生成器配置过该目录，先删除 `build/CMakeCache.txt` 和 `build/CMakeFiles/` 再重新配置。
 
 CMake 默认生成 `build/compile_commands.json`，并构建：
 
 - `bridgeengine_shared`
 - `bridgeengine_static`
-- `main`
-- `text_example`
-- `log_test`
+- `bridgeengine_desktop_example`
+- `bridgeengine_text_example`
+- `bridgeengine_log_example`
 
-如果桌面依赖不完整且没有打开 `BRIDGEENGINE_REQUIRE_DESKTOP_DEPS`，CMake 仍会生成 `compile_commands.json`，但桌面库和示例会从默认构建中排除。
-
-### Makefile
-
-```bash
-make            # 构建动态库 + 示例程序
-make lib        # 仅构建动态库
-make staticlib  # 仅构建静态库
-```
+请求桌面库或示例时，CMake 会在配置阶段检查 SDL3、SDL3_image、SDL3_ttf 和 FFmpeg；依赖缺失会直接失败。
 
 ### XJ380
 
@@ -90,10 +84,6 @@ XJ380_XACT_2026v4_xj380/depend/obj-gui
 ```bash
 cmake --build build --target xj380_staticlib
 cmake --build build --target xj380_epf
-
-# 或使用 Makefile
-make xj380_staticlib
-make xj380_epf
 ```
 
 ---
@@ -142,22 +132,21 @@ int main(void) {
 
 ```text
 BridgeEngine/
-├── include/            # 公共头文件
-├── engine/             # 引擎实现
+├── include/            # 唯一公共头文件 BridgeEngine.h
+├── src/                # 引擎实现
+│   ├── core/           # 初始化、渲染上下文与版本
+│   ├── internal/       # 平台及其他私有实现头
 │   ├── platform/       # 平台层 (SDL3 / XJ380)
-│   ├── render/         # 渲染实现
-│   ├── video/          # 视频实现
-│   ├── audio/          # 音频实现
-│   ├── text/           # 文字实现
 │   └── ...
+├── examples/           # 桌面、文字、日志和 XJ380 示例及资源
+├── tests/              # 回归测试
+├── docs/               # 架构与 API 文档
 ├── cmake/              # CMake 模块
-├── main.c              # 功能演示程序
 ├── CMakeLists.txt
-├── Makefile
-└── BAPI_README.md      # 详细 API 文档
+└── README.md
 ```
 
-完整 API 文档请查阅 [BAPI_README.md](BAPI_README.md)。
+完整 API 文档请查阅 [docs/bapi.md](docs/bapi.md)。
 
 ---
 

@@ -8,13 +8,13 @@ build BridgeEngine, but not generated products from a developer machine or SDK.
 
 Source files are tracked in Git:
 
-- `engine/` implementation files.
-- `include/` public and internal headers.
-- Root example sources such as `main.c`, `text_example.c`, `log_test.c`, and
-  `xj380_main.c`.
-- `Makefile`, `.clang-format`, README files, API docs, and repository docs.
-- Small example assets intentionally used by examples, such as files under
-  `audio_example/`, `image_example/`, `text/`, and `video_example/`.
+- `src/` implementation files and private headers under `src/internal/`.
+- `include/BridgeEngine.h` is the sole public header; all other headers are private.
+- Example sources under `examples/desktop/`, `examples/text/`, `examples/log/`,
+  and `examples/xj380/`.
+- `CMakeLists.txt`, CMake presets, `.clang-format`, README files, API docs, and repository docs.
+- Example assets intentionally used by examples, such as files under
+  `examples/assets/{audio,image,text,video}/`.
 
 ## Local XJ380 SDK
 
@@ -40,8 +40,8 @@ are all local SDK artifacts and should not be tracked:
 - `XJ380_XACT_2026v4_xj380/depend/obj-tui/**/*.o`
 - `XJ380_XACT_2026v4_xj380/depend/obj-tui/*.a`
 
-The Makefile reports a clear error when required XJ380 headers or GUI runtime
-objects are missing.
+The CMake `check_xj380_sdk` target reports a clear error when required XJ380
+headers or GUI runtime objects are missing.
 
 ## Build And Runtime Outputs
 

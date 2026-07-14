@@ -1,0 +1,34 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  architecture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject generated binaries
+        run: |
+          if git ls-files | grep -E '\.(dll|exe|o|a|so|epf)$'; then
+            echo "Generated binaries must not be tracked."
+            exit 1
+          fi
+      - name: Configure regression targets
+        run: >-
+          cmake -S . -B build-test
+          -DBRIDGEENGINE_BUILD_SHARED=OFF
+          -DBRIDGEENGINE_BUILD_STATIC=OFF
+          -DBRIDGEENGINE_BUILD_EXAMPLES=OFF
+          -DBRIDGEENGINE_BUILD_XJ380=OFF
+          -DBRIDGEENGINE_BUILD_TESTS=ON
+      - name: Run regression targets
+        run: cmake --build build-test && ctest --test-dir build-test --output-on-failure
+      - name: Verify missing XJ380 SDK fails clearly
+        run: |
+          cmake -S . -B build-xj380 -DBRIDGEENGINE_BUILD_SHARED=OFF -DBRIDGEENGINE_BUILD_STATIC=OFF -DBRIDGEENGINE_BUILD_EXAMPLES=OFF -DBRIDGEENGINE_BUILD_XJ380=ON
+          if cmake --build build-xj380 --target check_xj380_sdk; then
+            echo "Expected XJ380 SDK validation to fail without a local SDK."
+            exit 1
+          fi

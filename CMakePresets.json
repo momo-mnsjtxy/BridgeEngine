@@ -7,10 +7,12 @@
             "displayName":   "SDL3 (vcpkg or system)",
             "description":   "PC build targeting SDL3 + FFmpeg. Use -DCMAKE_TOOLCHAIN_FILE for vcpkg.",
             "generator":     "Ninja",
-            "binaryDir":     "${sourceDir}/build/default",
+            "binaryDir":     "${sourceDir}/build",
             "cacheVariables": {
-                "BUILD_SHARED_LIBS": "ON",
-                "BUILD_EXAMPLES":   "ON"
+                "BRIDGEENGINE_BUILD_SHARED": "ON",
+                "BRIDGEENGINE_BUILD_STATIC": "ON",
+                "BRIDGEENGINE_BUILD_EXAMPLES": "ON",
+                "BRIDGEENGINE_BUILD_XJ380": "OFF"
             }
         },
         {
@@ -21,7 +23,10 @@
             "binaryDir":     "${sourceDir}/build/release",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "BUILD_EXAMPLES":   "OFF"
+                "BRIDGEENGINE_BUILD_SHARED": "ON",
+                "BRIDGEENGINE_BUILD_STATIC": "OFF",
+                "BRIDGEENGINE_BUILD_EXAMPLES": "OFF",
+                "BRIDGEENGINE_BUILD_XJ380": "OFF"
             }
         },
         {
@@ -31,8 +36,10 @@
             "generator":     "Ninja",
             "binaryDir":     "${sourceDir}/build/static",
             "cacheVariables": {
-                "BUILD_SHARED_LIBS": "OFF",
-                "BUILD_EXAMPLES":   "ON"
+                "BRIDGEENGINE_BUILD_SHARED": "OFF",
+                "BRIDGEENGINE_BUILD_STATIC": "ON",
+                "BRIDGEENGINE_BUILD_EXAMPLES": "ON",
+                "BRIDGEENGINE_BUILD_XJ380": "OFF"
             }
         }
     ],
