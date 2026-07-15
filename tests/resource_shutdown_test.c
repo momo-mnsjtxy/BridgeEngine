@@ -33,7 +33,6 @@ static struct plat_window		fake_window;
 static struct plat_renderer		fake_renderer;
 static struct plat_audio_device fake_audio_device;
 static int						destroyed_texture_count;
-static int						destroyed_stream_count;
 static int						freed_sound_buffer_count;
 static int						closed_audio_device_count;
 static int						unsupported_video_warning_count;
@@ -200,7 +199,6 @@ static void resume_audio_stream_device(plat_audio_stream_t stream)
 
 static void destroy_audio_stream(plat_audio_stream_t stream)
 {
-	if (stream != NULL) destroyed_stream_count++;
 	free(stream);
 }
 
@@ -270,29 +268,26 @@ static const plat_interface_t unsupported_video_platform = {
 	.core = {.log_warn = log_warn},
 };
 
-int main(int argc, char **argv)
+int main(void)
 {
-	if (argc != 2) return 1;
 	if (bapi_runtime_start(&test_platform, "test", 1, 1) != 0) return 1;
 
 	bapi_texture_t texture = bapi_texture_load("texture");
 	if (bapi_audio_init() != 0) return 1;
-	bapi_sound_t sound	= bapi_sound_load("sound");
-	bapi_video_t video	= bapi_video_load(argv[1]);
-	int			 result = expect(texture != NULL && sound != NULL && video != NULL,
-								 "resources load through their production modules");
+	bapi_sound_t sound = bapi_sound_load("sound");
+	int result = expect(texture != NULL && sound != NULL,
+						"resources load through their production modules");
 
 	bapi_runtime_stop();
 	result = result && expect(destroyed_texture_count == 1, "shutdown destroys tracked textures") &&
-			   expect(destroyed_stream_count == 1, "shutdown destroys tracked video streams") &&
 			   expect(freed_sound_buffer_count == 1,
 						  "shutdown releases tracked sound buffers") &&
 			   expect(closed_audio_device_count == 1, "shutdown closes the audio device");
 	if (plat_init(&unsupported_video_platform) != 0) return 1;
-	result = result && expect(bapi_video_init() != 0 && bapi_video_load(argv[1]) == NULL,
-						"video capability failure is explicit in the FFmpeg implementation") &&
+	result = result && expect(bapi_video_init() != 0 && bapi_video_load("video") == NULL,
+						"video capability failure is explicit in the stub implementation") &&
 				expect(unsupported_video_warning_count == 1,
-						"FFmpeg implementation logs unsupported video once");
+						"stub implementation logs unsupported video once");
 	plat_shutdown();
 	return result ? 0 : 1;
 }

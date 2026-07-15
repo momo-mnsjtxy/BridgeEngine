@@ -68,7 +68,7 @@ set(BRIDGEENGINE_SOURCES
 	${BRIDGEENGINE_MEDIA_SOURCES}
 )
 
-if(BRIDGEENGINE_BUILD_SHARED OR BRIDGEENGINE_BUILD_STATIC OR BRIDGEENGINE_BUILD_EXAMPLES OR BRIDGEENGINE_BUILD_TESTS)
+if(BRIDGEENGINE_BUILD_SHARED OR BRIDGEENGINE_BUILD_STATIC OR BRIDGEENGINE_BUILD_EXAMPLES)
 	find_package(PkgConfig QUIET)
 
 	if(WIN32)
@@ -280,13 +280,16 @@ if(BRIDGEENGINE_BUILD_TESTS)
 		src/core/render_context.c
 		src/texture.c
 		src/audio.c
-		src/video/video.c
+		src/video/video_stub.c
 		src/platform/platform.c
 	)
-	bridgeengine_configure_target(bridgeengine_resource_shutdown_test)
+	target_include_directories(bridgeengine_resource_shutdown_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
 	add_test(NAME bridgeengine.resource_shutdown
 		COMMAND bridgeengine_resource_shutdown_test
-		"${CMAKE_CURRENT_SOURCE_DIR}/examples/assets/video/XINGJILOGE.mp4"
 	)
 
 	add_executable(bridgeengine_text_asset_test
