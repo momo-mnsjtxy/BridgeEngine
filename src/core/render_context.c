@@ -1,4 +1,6 @@
 #include "internal/engine/render_context.h"
+#include "internal/engine/texture_internal.h"
+#include "BridgeEngine.h"
 #include <string.h>
 
 typedef struct {
@@ -30,7 +32,11 @@ int bapi_runtime_start(const plat_interface_t *platform, const char *title, int 
 	if (!platform || plat_init(platform) != 0) return 1;
 
 	const plat_interface_t *active_platform = plat_get();
-	if (!active_platform || active_platform->core.init(PLAT_INIT_VIDEO | PLAT_INIT_AUDIO) != 0) {
+	uint32_t init_flags = PLAT_INIT_VIDEO;
+	if (active_platform != NULL && (active_platform->capabilities & PLAT_CAPABILITY_AUDIO) != 0) {
+		init_flags |= PLAT_INIT_AUDIO;
+	}
+	if (!active_platform || active_platform->core.init(init_flags) != 0) {
 		plat_shutdown();
 		return 1;
 	}
@@ -72,6 +78,9 @@ void bapi_runtime_stop(void)
 
 	const plat_interface_t *platform = plat_get();
 	if (platform) {
+		bapi_video_cleanup();
+		bapi_audio_cleanup();
+		bapi_texture_cleanup();
 		bapi_text_cleanup();
 		platform->text.quit_ttf();
 		bapi_runtime_release_window_and_renderer(platform);

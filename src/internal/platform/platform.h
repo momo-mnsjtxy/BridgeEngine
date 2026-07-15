@@ -98,11 +98,21 @@ typedef struct {
 	plat_text_api_t		text;
 	plat_audio_api_t	audio;
 	plat_sync_api_t		sync;
+	uint32_t			capabilities;
 } plat_interface_t;
+
+#define PLAT_CAPABILITY_AUDIO 0x00000001u
+#define PLAT_CAPABILITY_VIDEO 0x00000002u
 
 int plat_init(const plat_interface_t *interface);
 
 const plat_interface_t *plat_get(void);
+
+static inline int plat_supports(uint32_t capability)
+{
+	const plat_interface_t *platform = plat_get();
+	return platform != 0 && (platform->capabilities & capability) != 0;
+}
 
 void plat_shutdown(void);
 

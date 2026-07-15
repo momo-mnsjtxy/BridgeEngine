@@ -1,4 +1,5 @@
 #include "internal/bapi_internal.h"
+#include "internal/engine/texture_internal.h"
 #include "internal/platform/platform.h"
 #include "BridgeEngine.h"
 #include <stdio.h>
@@ -21,6 +22,7 @@ struct plat_surface {
 static struct plat_renderer fake_renderer;
 static float				rendered_width;
 static float				rendered_height;
+static int				destroyed_texture_count;
 
 plat_renderer_t bapi_internal_get_renderer(void)
 {
@@ -56,6 +58,7 @@ static plat_texture_t create_texture_from_surface(plat_renderer_t renderer, plat
 
 static void destroy_texture(plat_texture_t texture)
 {
+	destroyed_texture_count++;
 	free(texture);
 }
 
@@ -106,6 +109,7 @@ int main(void)
 	bapi_texture_t cached_first	 = bapi_texture_from_file("cached-image", NULL, NULL);
 	bapi_texture_t cached_second = bapi_texture_from_file("cached-image", NULL, NULL);
 	int			   result = expect(texture != NULL, "texture loads") &&
+							expect(texture->cache_key == NULL, "uncached texture has no cache key") &&
 							expect(width == 320 && height == 180, "texture reports source size") &&
 							expect(rendered_width == 320 && rendered_height == 180,
 								   "default render uses source size") &&
@@ -123,6 +127,7 @@ int main(void)
 	bapi_texture_destroy(cached_second);
 	bapi_texture_destroy(cached_after_clear);
 	bapi_texture_cache_clear();
+	result = result && expect(destroyed_texture_count == 3, "all texture backends are destroyed once");
 	plat_shutdown();
 	return result ? 0 : 1;
 }

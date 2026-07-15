@@ -992,23 +992,7 @@ static const plat_interface_t xj380_interface = {
 			.render_text_blended = xj380_render_text_blended,
 			.get_string_size	 = xj380_get_string_size,
 		},
-	.audio =
-		{
-			.open_audio_device			= xj380_open_audio_device,
-			.close_audio_device			= xj380_close_audio_device,
-			.create_audio_stream		= xj380_create_audio_stream,
-			.open_audio_device_stream	= xj380_open_audio_device_stream,
-			.bind_audio_stream			= xj380_bind_audio_stream,
-			.destroy_audio_stream		= xj380_destroy_audio_stream,
-			.put_audio_stream_data		= xj380_put_audio_stream_data,
-			.flush_audio_stream			= xj380_flush_audio_stream,
-			.get_audio_stream_queued	= xj380_get_audio_stream_queued,
-			.clear_audio_stream			= xj380_clear_audio_stream,
-			.set_audio_stream_gain		= xj380_set_audio_stream_gain,
-			.resume_audio_stream_device = xj380_resume_audio_stream_device,
-			.load_wav					= xj380_load_wav,
-			.mem_free					= xj380_mem_free,
-		},
+	.audio = {},
 	.sync =
 		{
 			.create_mutex  = xj380_create_mutex,
@@ -1016,6 +1000,7 @@ static const plat_interface_t xj380_interface = {
 			.lock_mutex	   = xj380_lock_mutex,
 			.unlock_mutex  = xj380_unlock_mutex,
 		},
+	.capabilities = 0,
 };
 
 const plat_interface_t *plat_xj380_interface(void)

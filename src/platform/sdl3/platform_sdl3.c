@@ -735,6 +735,7 @@ static void sdl3_log_critical(const char *fmt, ...)
 }
 
 static const plat_interface_t sdl3_interface = {
+	.capabilities = PLAT_CAPABILITY_AUDIO | PLAT_CAPABILITY_VIDEO,
 	.core =
 		{
 			.init		  = sdl3_init,

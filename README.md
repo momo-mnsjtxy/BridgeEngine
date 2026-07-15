@@ -72,7 +72,13 @@ CMake 默认生成 `build/compile_commands.json`，并构建：
 
 ### XJ380
 
-XJ380 SDK 是本地依赖，不进入 Git。需要在仓库根目录提供：
+XJ380 SDK 是本地依赖，不进入 Git。CMake 会按以下顺序自动查找可用 SDK：
+
+1. `XJ380_XACT_2026v4_xj380/depend`
+2. `XJ380_XACT_2026v4_linux/depend`
+3. `XJ380_XACT_2026v4_Windows/depend`
+
+每个候选目录都应包含：
 
 ```text
 XJ380_XACT_2026v4_xj380/depend/include
@@ -82,9 +88,22 @@ XJ380_XACT_2026v4_xj380/depend/obj-gui
 构建目标：
 
 ```bash
-cmake --build build --target xj380_staticlib
-cmake --build build --target xj380_epf
+cmake --preset xj380
+cmake --build --preset xj380 --target xj380_staticlib
+cmake --build --preset xj380 --target xj380_package
+cmake --build --preset xj380 --target xj380_epf
 ```
+
+若 SDK 位于其他位置，可在配置时指定：
+
+```bash
+cmake --preset xj380 -DXJ380_SDK=/实际路径/depend
+```
+
+外部 XJ380 项目应先构建 `xj380_package`，再将 `build/xj380/package/include/` 和
+`build/xj380/package/lib/` 复制到项目中，或作为 xxcc 的头文件和库搜索路径。包内提供
+`BridgeEngine.h`、生成的 `bridgeengine_version.h` 与 `libbridgeengine.a`；项目仍需自行提供 XJ380 SDK 的
+系统头、链接脚本和运行时对象。
 
 ---
 
@@ -92,7 +111,7 @@ cmake --build build --target xj380_epf
 
 桌面 SDL3 后端使用 SDL3_ttf 加载字体文件，并通过 FFmpeg 实现视频。
 
-XJ380 后端使用 XAPI 内置文本绘制，当前不加载 TTF 文件。XJ380 用户态头文件里的 `WSTR` 实际是 `char *`，BridgeEngine 不把它当作 UTF-16 或 `wchar_t`。XJ380 音频和视频后端目前尚未实现。
+XJ380 后端使用 XAPI 内置文本绘制，当前不加载 TTF 文件。XJ380 用户态头文件里的 `WSTR` 实际是 `char *`，BridgeEngine 不把它当作 UTF-16 或 `wchar_t`。XJ380 不支持音频和视频：`bapi_audio_init()` 与 `bapi_video_init()` 返回非零，声音和视频加载返回 `NULL`，并通过平台 warning 说明原因。调用方应检查这些既有返回值；不会新增媒体 capability 查询 BAPI。
 
 ---
 
@@ -101,30 +120,28 @@ XJ380 后端使用 XAPI 内置文本绘制，当前不加载 TTF 文件。XJ380 
 ```c
 #include <BridgeEngine.h>
 
-int main(void) {
-    bapi_engine_init("Hello BridgeEngine", 800, 600);
+int main(void)
+{
+    if (bapi_engine_init("Hello BridgeEngine", 800, 600) != 0) return 1;
 
-    bapi_texture_t text = bapi_render_text("Hello World!",
-        bapi_color(255, 255, 255, 255));
-
-    bool running = true;
     bapi_event_t event;
+    int running = 1;
     while (running) {
         while (bapi_poll_event(&event)) {
-            if (bapi_event_get_type(&event) == BAPI_EVENT_QUIT)
-                running = false;
+            if (bapi_event_get_type(&event) == BAPI_EVENT_QUIT) running = 0;
         }
         bapi_render_clear();
-        bapi_draw_text(text, 50, 50, 300, 40);
+        bapi_draw_circle(400, 300, 80, bapi_color(255, 255, 255, 255));
         bapi_render_present();
     }
 
-    bapi_destroy_text(text);
-    bapi_text_cleanup();
     bapi_engine_quit();
     return 0;
 }
 ```
+
+`bapi_engine_quit()` 会先释放引擎仍追踪的纹理、音频和视频资源，再销毁 renderer、窗口和平台。退出后所有
+资源句柄及借用的 window/renderer 句柄均失效，不应再使用或释放。
 
 ---
 
@@ -147,6 +164,11 @@ BridgeEngine/
 ```
 
 完整 API 文档请查阅 [docs/bapi.md](docs/bapi.md)。
+
+## 源码兼容性
+
+v2 的公开接口仅为 `BridgeEngine.h`。旧项目若仍包含 `audio/audio.h`、`render/draw.h` 等拆分头路径，可额外将包内的 `include/legacy/` 加入头文件搜索路径；其中的兼容头会转发到当前聚合头。
+这不包含 `bapi_internal.h`、`scene/scene_internal.h`、`bapi_event_t` 的旧平台内部字段、`bapi_texture_internal` 的旧内部字段，或已编译二进制的 ABI 兼容性。
 
 ---
 

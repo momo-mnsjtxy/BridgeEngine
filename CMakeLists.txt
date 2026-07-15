@@ -24,6 +24,12 @@ configure_file(
 	"${CMAKE_CURRENT_BINARY_DIR}/generated/bridgeengine_version.h"
 	@ONLY
 )
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated/xposix")
+configure_file(
+	"${CMAKE_CURRENT_SOURCE_DIR}/cmake/xj380_stddef.h.in"
+	"${CMAKE_CURRENT_BINARY_DIR}/generated/xposix/stddef.h"
+	COPYONLY
+)
 
 set(BRIDGEENGINE_PLATFORM_SOURCES
 	src/platform/platform.c
@@ -153,6 +159,14 @@ if(BRIDGEENGINE_BUILD_TESTS)
 	)
 	add_test(NAME bridgeengine.public_header_cpp COMMAND bridgeengine_public_header_cpp_test)
 
+	add_executable(bridgeengine_legacy_header_paths_test tests/legacy_header_paths_test.cpp)
+	target_include_directories(bridgeengine_legacy_header_paths_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_SOURCE_DIR}/include/legacy"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+	)
+	add_test(NAME bridgeengine.legacy_header_paths COMMAND bridgeengine_legacy_header_paths_test)
+
 	add_executable(bridgeengine_scene_level_xml_test
 		tests/scene_level_xml_test.c
 		src/scene.c
@@ -180,6 +194,17 @@ if(BRIDGEENGINE_BUILD_TESTS)
 	)
 	add_test(NAME bridgeengine.texture COMMAND bridgeengine_texture_test)
 
+	add_executable(bridgeengine_math_geometry_test
+		tests/math_geometry_test.c
+		src/math.c
+	)
+	target_include_directories(bridgeengine_math_geometry_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+	)
+	target_link_libraries(bridgeengine_math_geometry_test PRIVATE m)
+	add_test(NAME bridgeengine.math_geometry COMMAND bridgeengine_math_geometry_test)
+
 	add_executable(bridgeengine_lifecycle_test
 		tests/lifecycle_test.c
 		src/core/render_context.c
@@ -191,6 +216,78 @@ if(BRIDGEENGINE_BUILD_TESTS)
 		"${CMAKE_CURRENT_SOURCE_DIR}/src"
 	)
 	add_test(NAME bridgeengine.lifecycle COMMAND bridgeengine_lifecycle_test)
+
+	add_executable(bridgeengine_platform_capabilities_test
+		tests/platform_capabilities_test.c
+		src/audio.c
+		src/video/video_stub.c
+		src/core/init.c
+		src/core/render_context.c
+		src/platform/platform.c
+	)
+	target_include_directories(bridgeengine_platform_capabilities_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	target_link_libraries(bridgeengine_platform_capabilities_test PRIVATE m)
+	add_test(NAME bridgeengine.platform_capabilities COMMAND bridgeengine_platform_capabilities_test)
+
+	add_executable(bridgeengine_public_lifecycle_test
+		tests/public_lifecycle_test.c
+		src/core/init.c
+		src/core/render_context.c
+		src/platform/platform.c
+	)
+	target_include_directories(bridgeengine_public_lifecycle_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	target_link_libraries(bridgeengine_public_lifecycle_test PRIVATE m)
+	add_test(NAME bridgeengine.public_lifecycle COMMAND bridgeengine_public_lifecycle_test)
+
+	if(BRIDGEENGINE_BUILD_STATIC)
+		set(BRIDGEENGINE_COMPAT_LINK_TARGET bridgeengine_static)
+	elseif(BRIDGEENGINE_BUILD_SHARED)
+		set(BRIDGEENGINE_COMPAT_LINK_TARGET bridgeengine_shared)
+	else()
+		message(STATUS "Skipping aggregate compatibility tests: no BridgeEngine library target is enabled")
+	endif()
+	if(BRIDGEENGINE_COMPAT_LINK_TARGET)
+		add_executable(bridgeengine_master_aggregate_bapi_compat_test
+			tests/master_aggregate_bapi_compat_test.c
+		)
+		target_link_libraries(bridgeengine_master_aggregate_bapi_compat_test PRIVATE
+			${BRIDGEENGINE_COMPAT_LINK_TARGET}
+		)
+		add_test(NAME bridgeengine.master_aggregate_bapi_compat
+			COMMAND bridgeengine_master_aggregate_bapi_compat_test
+		)
+		if(BRIDGEENGINE_BUILD_SHARED)
+			add_test(NAME bridgeengine.install_tree_smoke
+				COMMAND ${CMAKE_COMMAND}
+					-DBUILD_DIR=${CMAKE_BINARY_DIR}
+					-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+					-DC_COMPILER=${CMAKE_C_COMPILER}
+					-P ${CMAKE_CURRENT_SOURCE_DIR}/tests/install_tree_smoke.cmake
+			)
+		endif()
+	endif()
+
+	add_executable(bridgeengine_resource_shutdown_test
+		tests/resource_shutdown_test.c
+		src/core/render_context.c
+		src/texture.c
+		src/audio.c
+		src/video/video.c
+		src/platform/platform.c
+	)
+	bridgeengine_configure_target(bridgeengine_resource_shutdown_test)
+	add_test(NAME bridgeengine.resource_shutdown
+		COMMAND bridgeengine_resource_shutdown_test
+		"${CMAKE_CURRENT_SOURCE_DIR}/examples/assets/video/XINGJILOGE.mp4"
+	)
 
 	add_executable(bridgeengine_text_asset_test
 		tests/text_asset_test.c
@@ -239,7 +336,27 @@ if(BRIDGEENGINE_BUILD_EXAMPLES)
 endif()
 
 if(BRIDGEENGINE_BUILD_XJ380)
-	set(XJ380_SDK "${CMAKE_CURRENT_SOURCE_DIR}/XJ380_XACT_2026v4_xj380/depend" CACHE PATH "Path to the XJ380 SDK depend directory")
+	set(XJ380_SDK_CANDIDATES
+		"${CMAKE_CURRENT_SOURCE_DIR}/XJ380_XACT_2026v4_xj380/depend"
+		"${CMAKE_CURRENT_SOURCE_DIR}/XJ380_XACT_2026v4_linux/depend"
+		"${CMAKE_CURRENT_SOURCE_DIR}/XJ380_XACT_2026v4_Windows/depend"
+	)
+	set(XJ380_SDK_DEFAULT "")
+	foreach(candidate IN LISTS XJ380_SDK_CANDIDATES)
+		if(IS_DIRECTORY "${candidate}/include" AND IS_DIRECTORY "${candidate}/obj-gui")
+			set(XJ380_SDK_DEFAULT "${candidate}")
+			break()
+		endif()
+	endforeach()
+	if(NOT XJ380_SDK_DEFAULT)
+		list(GET XJ380_SDK_CANDIDATES 0 XJ380_SDK_DEFAULT)
+	endif()
+	set(XJ380_SDK_LEGACY_DEFAULT "${CMAKE_CURRENT_SOURCE_DIR}/XJ380_XACT_2026v4_xj380/depend")
+	if(NOT DEFINED XJ380_SDK OR XJ380_SDK STREQUAL XJ380_SDK_LEGACY_DEFAULT)
+		set(XJ380_SDK "${XJ380_SDK_DEFAULT}" CACHE PATH "Path to the XJ380 SDK depend directory" FORCE)
+	else()
+		set(XJ380_SDK "${XJ380_SDK}" CACHE PATH "Path to the XJ380 SDK depend directory")
+	endif()
 	set(XJ380_CC clang CACHE FILEPATH "XJ380 C compiler")
 	set(XJ380_CXX clang++ CACHE FILEPATH "XJ380 C++ compiler")
 	set(XJ380_LD ld CACHE FILEPATH "XJ380 linker")
@@ -271,6 +388,7 @@ if(BRIDGEENGINE_BUILD_XJ380)
 		-ffreestanding -fno-builtin -m64 -fno-stack-protector -fshort-wchar
 		-nostdinc -O -g -fPIC
 		-I${CMAKE_CURRENT_SOURCE_DIR}/include
+		-I${CMAKE_CURRENT_BINARY_DIR}/generated
 		-I${CMAKE_CURRENT_SOURCE_DIR}/src
 		-I${XJ380_SDK}/include
 		-I${XJ380_SDK}/include/xposix
@@ -317,6 +435,43 @@ if(BRIDGEENGINE_BUILD_XJ380)
 	)
 	add_custom_target(xj380_staticlib DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/libbridgeengine_xj380.a")
 
+	set(XJ380_PACKAGE_DIR "${CMAKE_CURRENT_BINARY_DIR}/package")
+	set(XJ380_PACKAGE_HEADERS
+		"${XJ380_PACKAGE_DIR}/include/BridgeEngine.h"
+		"${XJ380_PACKAGE_DIR}/include/bridgeengine_version.h"
+		"${XJ380_PACKAGE_DIR}/include/xposix/stddef.h"
+	)
+	set(XJ380_PACKAGE_LIBRARY "${XJ380_PACKAGE_DIR}/lib/libbridgeengine.a")
+	add_custom_command(
+		OUTPUT ${XJ380_PACKAGE_HEADERS} "${XJ380_PACKAGE_LIBRARY}"
+		COMMAND ${CMAKE_COMMAND} -E rm -rf "${XJ380_PACKAGE_DIR}/include"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${XJ380_PACKAGE_DIR}/include"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${XJ380_PACKAGE_DIR}/include/xposix"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${XJ380_PACKAGE_DIR}/lib"
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+			"${CMAKE_CURRENT_SOURCE_DIR}/include"
+			"${XJ380_PACKAGE_DIR}/include"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_CURRENT_SOURCE_DIR}/include/BridgeEngine.h"
+			"${XJ380_PACKAGE_DIR}/include/BridgeEngine.h"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_CURRENT_BINARY_DIR}/generated/bridgeengine_version.h"
+			"${XJ380_PACKAGE_DIR}/include/bridgeengine_version.h"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_CURRENT_BINARY_DIR}/generated/xposix/stddef.h"
+			"${XJ380_PACKAGE_DIR}/include/xposix/stddef.h"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_CURRENT_BINARY_DIR}/libbridgeengine_xj380.a"
+			"${XJ380_PACKAGE_LIBRARY}"
+		DEPENDS xj380_staticlib
+			"${CMAKE_CURRENT_SOURCE_DIR}/include/BridgeEngine.h"
+			"${CMAKE_CURRENT_BINARY_DIR}/generated/bridgeengine_version.h"
+			"${CMAKE_CURRENT_BINARY_DIR}/generated/xposix/stddef.h"
+			"${CMAKE_CURRENT_BINARY_DIR}/libbridgeengine_xj380.a"
+		VERBATIM
+	)
+	add_custom_target(xj380_package DEPENDS ${XJ380_PACKAGE_HEADERS} "${XJ380_PACKAGE_LIBRARY}")
+
 	file(GLOB_RECURSE XJ380_XAPI_OBJS
 		"${XJ380_SDK}/obj-gui/*.o"
 		"${XJ380_SDK}/obj-gui/*/*.o"
@@ -355,5 +510,8 @@ if(BRIDGEENGINE_INSTALL_TARGETS)
 		RUNTIME DESTINATION bin
 	)
 endif()
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/include/BridgeEngine.h" DESTINATION include)
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/" DESTINATION include
+	FILES_MATCHING PATTERN "*.h"
+)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/bridgeengine_version.h" DESTINATION include)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/bridgeengine_version.h" DESTINATION include)

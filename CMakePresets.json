@@ -41,6 +41,20 @@
                 "BRIDGEENGINE_BUILD_EXAMPLES": "ON",
                 "BRIDGEENGINE_BUILD_XJ380": "OFF"
             }
+        },
+        {
+            "name":          "xj380",
+            "displayName":   "XJ380 cross build",
+            "description":   "Configure XJ380 targets using the local XJ380 SDK.",
+            "generator":     "Ninja",
+            "binaryDir":     "${sourceDir}/build/xj380",
+            "cacheVariables": {
+                "BRIDGEENGINE_BUILD_SHARED": "OFF",
+                "BRIDGEENGINE_BUILD_STATIC": "OFF",
+                "BRIDGEENGINE_BUILD_EXAMPLES": "OFF",
+                "BRIDGEENGINE_BUILD_TESTS": "OFF",
+                "BRIDGEENGINE_BUILD_XJ380": "ON"
+            }
         }
     ],
     "buildPresets": [
@@ -55,6 +69,10 @@
         {
             "name":          "static",
             "configurePreset": "static"
+        },
+        {
+            "name":          "xj380",
+            "configurePreset": "xj380"
         }
     ]
 }

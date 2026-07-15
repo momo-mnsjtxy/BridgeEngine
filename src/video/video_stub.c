@@ -6,11 +6,24 @@
 
 
 #include "BridgeEngine.h"
+#include "internal/platform/platform.h"
 #include <stdlib.h>
+
+static int video_unsupported_warning_logged;
+
+static void warn_video_unsupported_once(const plat_interface_t *plat)
+{
+	if (!video_unsupported_warning_logged && plat != NULL && plat->core.log_warn != NULL) {
+		plat->core.log_warn("Video is not supported by this platform");
+		video_unsupported_warning_logged = 1;
+	}
+}
 
 int bapi_video_init(void)
 {
-	return 0;
+	const plat_interface_t *plat = plat_get();
+	warn_video_unsupported_once(plat);
+	return 1;
 }
 
 void bapi_video_cleanup(void)
@@ -20,6 +33,8 @@ void bapi_video_cleanup(void)
 bapi_video_t bapi_video_load(const char *filepath)
 {
 	(void)filepath;
+	const plat_interface_t *plat = plat_get();
+	warn_video_unsupported_once(plat);
 	return NULL;
 }
 

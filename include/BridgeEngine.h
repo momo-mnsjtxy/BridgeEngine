@@ -2,6 +2,7 @@
 
 #include "bridgeengine_version.h"
 
+#include <stddef.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -168,7 +169,9 @@ typedef struct {
 } bapi_log_config_t;
 
 int				bapi_engine_init(const char *title, int width, int height);
+/* Releases all engine resources; resource handles are invalid after this call. */
 void			bapi_engine_quit(void);
+/* Borrowed handles; valid only from bapi_engine_init() through bapi_engine_quit(). */
 bapi_window_t	bapi_engine_get_window(void);
 bapi_renderer_t bapi_engine_get_renderer(void);
 
@@ -301,6 +304,12 @@ bapi_vec2_t	  bapi_vec2_lerp(bapi_vec2_t a, bapi_vec2_t b, float t);
 bapi_vec2_t	  bapi_vec2_rotate(bapi_vec2_t vector, float angle);
 int			  bapi_vec2_equals(bapi_vec2_t a, bapi_vec2_t b);
 bapi_circle_t bapi_circle(float x, float y, float radius);
+/*
+ * Geometry queries require finite coordinates, non-negative circle radii, and
+ * non-negative rectangle widths and heights. Results outside these preconditions
+ * are unspecified. Rectangle/AABB queries require positive-area overlap, while
+ * circle queries count touching as an intersection.
+ */
 int			  bapi_rect_contains_point(bapi_rect_t rect, bapi_vec2_t point);
 int			  bapi_rect_intersects(bapi_rect_t a, bapi_rect_t b);
 bapi_rect_t	  bapi_rect_intersection(bapi_rect_t a, bapi_rect_t b);
@@ -309,6 +318,7 @@ bapi_vec2_t	  bapi_rect_center(bapi_rect_t rect);
 int			  bapi_circle_contains_point(bapi_circle_t circle, bapi_vec2_t point);
 int			  bapi_circle_intersects_circle(bapi_circle_t a, bapi_circle_t b);
 int			  bapi_circle_intersects_rect(bapi_circle_t circle, bapi_rect_t rect);
+/* Alias of bapi_rect_intersects with identical positive-area semantics. */
 int			  bapi_collision_aabb(bapi_rect_t a, bapi_rect_t b);
 float		  bapi_clamp(float value, float min, float max);
 float		  bapi_lerp(float a, float b, float t);

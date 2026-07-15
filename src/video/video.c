@@ -54,9 +54,32 @@ struct bapi_video_internal {
 
 	char	*filepath;
 	uint32_t last_update;
+	struct bapi_video_internal *next_allocated;
 };
 
 static bapi_video_t g_current_video = NULL;
+static bapi_video_t g_allocated_videos = NULL;
+static int		  video_unsupported_warning_logged;
+
+static void warn_video_unsupported_once(const plat_interface_t *plat)
+{
+	if (!video_unsupported_warning_logged && plat != NULL && plat->core.log_warn != NULL) {
+		plat->core.log_warn("Video is not supported by this platform");
+		video_unsupported_warning_logged = 1;
+	}
+}
+
+static void remove_allocated_video(bapi_video_t video)
+{
+	bapi_video_t *current = &g_allocated_videos;
+	while (*current != NULL) {
+		if (*current == video) {
+			*current = video->next_allocated;
+			return;
+		}
+		current = &(*current)->next_allocated;
+	}
+}
 
 static char *bapi_video_copy_string(const char *text)
 {
@@ -384,18 +407,32 @@ static int init_audio_decoder(bapi_video_t video)
 
 int bapi_video_init(void)
 {
+	const plat_interface_t *plat = plat_get();
+	if (!plat_supports(PLAT_CAPABILITY_VIDEO)) {
+		warn_video_unsupported_once(plat);
+		return 1;
+	}
+
 	printf("[VIDEO] Video subsystem initialized (FFmpeg version)\n");
 	return 0;
 }
 
 void bapi_video_cleanup(void)
 {
-	g_current_video = NULL;
+	while (g_allocated_videos != NULL) {
+		bapi_video_free(g_allocated_videos);
+	}
 	printf("[VIDEO] Video subsystem cleaned up\n");
 }
 
 bapi_video_t bapi_video_load(const char *filepath)
 {
+	const plat_interface_t *plat = plat_get();
+	if (!plat_supports(PLAT_CAPABILITY_VIDEO)) {
+		warn_video_unsupported_once(plat);
+		return NULL;
+	}
+
 	if (filepath == NULL) {
 		printf("[VIDEO] Error: filepath is NULL\n");
 		return NULL;
@@ -528,6 +565,8 @@ bapi_video_t bapi_video_load(const char *filepath)
 	printf("[VIDEO] Loaded: %s (%dx%d @ %.2f fps, duration: %.2fs)\n", filepath, video->width,
 		   video->height, video->fps, video->duration);
 
+	video->next_allocated = g_allocated_videos;
+	g_allocated_videos = video;
 	return video;
 
 cleanup_error:
@@ -553,6 +592,7 @@ void bapi_video_free(bapi_video_t video)
 	if (g_current_video == video) {
 		g_current_video = NULL;
 	}
+	remove_allocated_video(video);
 
 	if (video->audio_stream) {
 		plat->audio.destroy_audio_stream(video->audio_stream);

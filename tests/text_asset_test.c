@@ -13,6 +13,7 @@ static struct plat_font fake_font;
 static int				text_initialized;
 static int				open_attempt_count;
 static int				close_font_count;
+static const char	*available_font_path;
 
 bool bapi_runtime_is_initialized(void)
 {
@@ -38,7 +39,7 @@ static plat_font_t open_font(const char *filepath, float size)
 {
 	(void)size;
 	open_attempt_count++;
-	return strcmp(filepath, "examples/assets/text/font.ttf") == 0 ? &fake_font : NULL;
+	return strcmp(filepath, available_font_path) == 0 ? &fake_font : NULL;
 }
 
 static void close_font(plat_font_t font)
@@ -74,6 +75,7 @@ int main(void)
 	};
 	if (plat_init(&platform) != 0) return 1;
 
+	available_font_path = "examples/assets/text/font.ttf";
 	bapi_text_init();
 	float width	 = 0;
 	float height = 0;
@@ -83,6 +85,16 @@ int main(void)
 		expect(open_attempt_count == 2, "source-tree font path follows runtime asset path");
 	bapi_text_cleanup();
 	result = result && expect(close_font_count == 1, "cleanup closes fallback font");
+
+	open_attempt_count = 0;
+	close_font_count	= 0;
+	available_font_path = "text/font.ttf";
+	bapi_text_init();
+	bapi_get_text_size("text", 16, &width, &height);
+	result = result && expect(width == 20 && height == 30, "legacy font renders text metrics") &&
+			 expect(open_attempt_count == 3, "legacy font path follows current fallbacks");
+	bapi_text_cleanup();
+	result = result && expect(close_font_count == 1, "cleanup closes legacy font");
 	plat_shutdown();
 	return result ? 0 : 1;
 }

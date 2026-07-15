@@ -20,8 +20,17 @@ static int fail_ttf_init;
 static int core_quit_count;
 static int window_destroy_count;
 static int renderer_destroy_count;
+static int renderer_destroy_order;
+static int window_destroy_order;
+static int core_quit_order;
 static int ttf_quit_count;
 static int text_cleanup_count;
+static int video_cleanup_count;
+static int audio_cleanup_count;
+static int texture_cleanup_count;
+static int video_cleanup_order;
+static int audio_cleanup_order;
+static int texture_cleanup_order;
 static int cleanup_order;
 static int ttf_quit_order;
 static int lifecycle_order;
@@ -30,6 +39,24 @@ void bapi_text_cleanup(void)
 {
 	text_cleanup_count++;
 	cleanup_order = ++lifecycle_order;
+}
+
+void bapi_video_cleanup(void)
+{
+	video_cleanup_count++;
+	video_cleanup_order = ++lifecycle_order;
+}
+
+void bapi_audio_cleanup(void)
+{
+	audio_cleanup_count++;
+	audio_cleanup_order = ++lifecycle_order;
+}
+
+void bapi_texture_cleanup(void)
+{
+	texture_cleanup_count++;
+	texture_cleanup_order = ++lifecycle_order;
 }
 
 static int core_init(uint32_t flags)
@@ -41,6 +68,7 @@ static int core_init(uint32_t flags)
 static void core_quit(void)
 {
 	core_quit_count++;
+	core_quit_order = ++lifecycle_order;
 }
 
 static plat_window_t create_window(const char *title, int width, int height)
@@ -53,7 +81,10 @@ static plat_window_t create_window(const char *title, int width, int height)
 
 static void destroy_window(plat_window_t window)
 {
-	if (window) window_destroy_count++;
+	if (window) {
+		window_destroy_count++;
+		window_destroy_order = ++lifecycle_order;
+	}
 }
 
 static plat_renderer_t create_renderer(plat_window_t window)
@@ -63,7 +94,10 @@ static plat_renderer_t create_renderer(plat_window_t window)
 
 static void destroy_renderer(plat_renderer_t renderer)
 {
-	if (renderer) renderer_destroy_count++;
+	if (renderer) {
+		renderer_destroy_count++;
+		renderer_destroy_order = ++lifecycle_order;
+	}
 }
 
 static void set_render_draw_color(plat_renderer_t renderer, uint8_t red, uint8_t green,
@@ -107,8 +141,17 @@ static void reset_state(void)
 	core_quit_count		   = 0;
 	window_destroy_count   = 0;
 	renderer_destroy_count = 0;
+	renderer_destroy_order = 0;
+	window_destroy_order   = 0;
+	core_quit_order		   = 0;
 	ttf_quit_count		   = 0;
 	text_cleanup_count	   = 0;
+	video_cleanup_count	  = 0;
+	audio_cleanup_count	  = 0;
+	texture_cleanup_count  = 0;
+	video_cleanup_order	  = 0;
+	audio_cleanup_order	  = 0;
+	texture_cleanup_order  = 0;
 	cleanup_order		   = 0;
 	ttf_quit_order		   = 0;
 	lifecycle_order		   = 0;
@@ -183,10 +226,18 @@ static int test_successful_stop(void)
 	bapi_runtime_stop();
 	result =
 		result &&
+		expect(video_cleanup_count == 1 && audio_cleanup_count == 1 && texture_cleanup_count == 1 &&
+				   video_cleanup_order < audio_cleanup_order &&
+				   audio_cleanup_order < texture_cleanup_order && texture_cleanup_order < cleanup_order,
+			   "stop cleans media resources before text") &&
 		expect(text_cleanup_count == 1 && ttf_quit_count == 1 && cleanup_order < ttf_quit_order,
 			   "stop cleans text before closing TTF") &&
 		expect(renderer_destroy_count == 1 && window_destroy_count == 1 && core_quit_count == 1,
 			   "stop releases renderer, window, and core") &&
+		expect(ttf_quit_order < renderer_destroy_order &&
+				   renderer_destroy_order < window_destroy_order &&
+				   window_destroy_order < core_quit_order,
+			   "stop releases backend resources in dependency order") &&
 		expect(!bapi_runtime_is_initialized() && plat_get() == NULL, "stop resets runtime");
 	bapi_runtime_stop();
 	return result && expect(text_cleanup_count == 1, "repeated stop is idempotent");

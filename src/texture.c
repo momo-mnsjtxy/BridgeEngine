@@ -7,6 +7,7 @@
 #include <string.h>
 
 static bapi_texture_t g_texture_cache[BAPI_MAX_CACHED_TEXTURES];
+static bapi_texture_t g_allocated_textures;
 
 static char *bapi_texture_copy_key(const char *filepath)
 {
@@ -26,16 +27,34 @@ static void bapi_texture_remove_from_cache(bapi_texture_t texture)
 	}
 }
 
-static void bapi_texture_release(bapi_texture_t texture)
+static void bapi_texture_remove_from_allocated(bapi_texture_t texture)
 {
-	if (!texture || --texture->reference_count > 0) return;
-	bapi_texture_remove_from_cache(texture);
+	bapi_texture_t *current = &g_allocated_textures;
+	while (*current != NULL) {
+		if (*current == texture) {
+			*current = texture->next_allocated;
+			return;
+		}
+		current = &(*current)->next_allocated;
+	}
+}
+
+static void bapi_texture_free(bapi_texture_t texture)
+{
 	const plat_interface_t *plat = plat_get();
-	if (plat) {
+	bapi_texture_remove_from_cache(texture);
+	bapi_texture_remove_from_allocated(texture);
+	if (plat != NULL && texture->platform_texture != NULL) {
 		plat->texture.destroy_texture(texture->platform_texture);
 	}
 	free(texture->cache_key);
 	free(texture);
+}
+
+static void bapi_texture_release(bapi_texture_t texture)
+{
+	if (!texture || --texture->reference_count > 0) return;
+	bapi_texture_free(texture);
 }
 
 bapi_texture_t bapi_texture_load(const char *filepath)
@@ -60,7 +79,7 @@ bapi_texture_t bapi_texture_load(const char *filepath)
 		return NULL;
 	}
 
-	bapi_texture_t tex = malloc(sizeof(struct bapi_texture_internal));
+	bapi_texture_t tex = calloc(1, sizeof(struct bapi_texture_internal));
 	if (!tex) {
 		plat->texture.destroy_texture(plat_tex);
 		return NULL;
@@ -73,6 +92,8 @@ bapi_texture_t bapi_texture_load(const char *filepath)
 		free(tex);
 		return NULL;
 	}
+	tex->next_allocated = g_allocated_textures;
+	g_allocated_textures = tex;
 	return tex;
 }
 
@@ -110,6 +131,14 @@ void bapi_texture_cache_clear(void)
 		bapi_texture_t texture = g_texture_cache[index];
 		g_texture_cache[index] = NULL;
 		bapi_texture_release(texture);
+	}
+}
+
+void bapi_texture_cleanup(void)
+{
+	memset(g_texture_cache, 0, sizeof(g_texture_cache));
+	while (g_allocated_textures != NULL) {
+		bapi_texture_free(g_allocated_textures);
 	}
 }
 

@@ -9,6 +9,7 @@
 #define MAX_FONTS		  8
 #define FONT_PATH_RUNTIME "assets/text/font.ttf"
 #define FONT_PATH_SOURCE  "examples/assets/text/font.ttf"
+#define FONT_PATH_LEGACY  "text/font.ttf"
 
 typedef struct {
 	plat_font_t font;
@@ -33,7 +34,7 @@ static plat_font_t get_or_load_font(float size)
 
 	for (int i = 0; i < MAX_FONTS; i++) {
 		if (!g_font_cache[i].in_use) {
-			const char *font_paths[] = {FONT_PATH_RUNTIME, FONT_PATH_SOURCE};
+			const char *font_paths[] = {FONT_PATH_RUNTIME, FONT_PATH_SOURCE, FONT_PATH_LEGACY};
 			for (size_t path_index = 0; path_index < sizeof(font_paths) / sizeof(font_paths[0]);
 				 path_index++) {
 				g_font_cache[i].font = plat->text.open_font(font_paths[path_index], size);

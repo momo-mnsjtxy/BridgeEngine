@@ -14,10 +14,26 @@ struct bapi_sound_internal {
 	plat_audio_stream_t			stream;
 	int							queued_once;
 	struct bapi_sound_internal *next_active;
+	struct bapi_sound_internal *next_allocated;
 };
 
 static plat_audio_device_t audio_device	 = NULL;
 static bapi_sound_t		   active_sounds = NULL;
+static bapi_sound_t		   allocated_sounds = NULL;
+static int				   audio_unsupported_warning_logged;
+
+static int audio_is_supported(void)
+{
+	return plat_supports(PLAT_CAPABILITY_AUDIO);
+}
+
+static void warn_audio_unsupported_once(const plat_interface_t *plat)
+{
+	if (!audio_unsupported_warning_logged && plat != NULL && plat->core.log_warn != NULL) {
+		plat->core.log_warn("Audio is not supported by this platform");
+		audio_unsupported_warning_logged = 1;
+	}
+}
 
 static void remove_active_sound(bapi_sound_t sound)
 {
@@ -42,8 +58,22 @@ static void add_active_sound(bapi_sound_t sound)
 	active_sounds	   = sound;
 }
 
+static void remove_allocated_sound(bapi_sound_t sound)
+{
+	bapi_sound_t *current = &allocated_sounds;
+	while (*current != NULL) {
+		if (*current == sound) {
+			*current = sound->next_allocated;
+			return;
+		}
+		current = &(*current)->next_allocated;
+	}
+}
+
 static int ensure_sound_stream(bapi_sound_t sound)
 {
+	if (!audio_is_supported()) return 1;
+
 	if (sound->stream != NULL) {
 		return 0;
 	}
@@ -75,6 +105,8 @@ static int ensure_sound_stream(bapi_sound_t sound)
 
 static int queue_sound_buffer(bapi_sound_t sound)
 {
+	if (!audio_is_supported()) return 1;
+
 	const plat_interface_t *plat = plat_get();
 
 	if (plat->audio.put_audio_stream_data(sound->stream, sound->buffer, (int)sound->length) != 0) {
@@ -93,6 +125,10 @@ static int queue_sound_buffer(bapi_sound_t sound)
 int bapi_audio_init(void)
 {
 	const plat_interface_t *plat = plat_get();
+	if (!audio_is_supported() || plat->audio.open_audio_device == NULL) {
+		warn_audio_unsupported_once(plat);
+		return 1;
+	}
 
 	audio_device = plat->audio.open_audio_device(PLAT_AUDIO_F32, 2, 44100);
 	if (audio_device == NULL) {
@@ -106,20 +142,13 @@ int bapi_audio_init(void)
 
 void bapi_audio_cleanup(void)
 {
+	if (!audio_is_supported()) return;
+
 	const plat_interface_t *plat = plat_get();
 
-	bapi_sound_t sound = active_sounds;
-	while (sound != NULL) {
-		bapi_sound_t next  = sound->next_active;
-		sound->playing	   = 0;
-		sound->queued_once = 0;
-		if (sound->stream != NULL) {
-			plat->audio.clear_audio_stream(sound->stream);
-		}
-		sound->next_active = NULL;
-		sound			   = next;
+	while (allocated_sounds != NULL) {
+		bapi_sound_free(allocated_sounds);
 	}
-
 	active_sounds = NULL;
 
 	if (audio_device != NULL) {
@@ -131,6 +160,10 @@ void bapi_audio_cleanup(void)
 bapi_sound_t bapi_sound_load(const char *filepath)
 {
 	const plat_interface_t *plat = plat_get();
+	if (!audio_is_supported() || plat->audio.load_wav == NULL) {
+		warn_audio_unsupported_once(plat);
+		return NULL;
+	}
 
 	bapi_sound_t sound = malloc(sizeof(struct bapi_sound_internal));
 	if (sound == NULL) {
@@ -153,11 +186,15 @@ bapi_sound_t bapi_sound_load(const char *filepath)
 	sound->stream	   = NULL;
 	sound->queued_once = 0;
 	sound->next_active = NULL;
+	sound->next_allocated = allocated_sounds;
+	allocated_sounds = sound;
 	return sound;
 }
 
 int bapi_sound_play(bapi_sound_t sound)
 {
+	if (!audio_is_supported()) return 1;
+
 	if (sound == NULL || audio_device == NULL) {
 		printf("[AUDIO] Play failed: sound=%p, device=%p\n", (void *)sound, (void *)audio_device);
 		return 1;
@@ -187,6 +224,8 @@ int bapi_sound_play(bapi_sound_t sound)
 
 void bapi_sound_set_volume(bapi_sound_t sound, float volume)
 {
+	if (!audio_is_supported()) return;
+
 	if (sound != NULL) {
 		const plat_interface_t *plat = plat_get();
 
@@ -206,6 +245,8 @@ void bapi_sound_set_volume(bapi_sound_t sound, float volume)
 
 void bapi_sound_set_loop(bapi_sound_t sound, int loop)
 {
+	if (!audio_is_supported()) return;
+
 	if (sound != NULL) {
 		sound->loop = loop;
 	}
@@ -213,6 +254,8 @@ void bapi_sound_set_loop(bapi_sound_t sound, int loop)
 
 void bapi_sound_stop(bapi_sound_t sound)
 {
+	if (!audio_is_supported()) return;
+
 	if (sound != NULL) {
 		const plat_interface_t *plat = plat_get();
 
@@ -227,6 +270,8 @@ void bapi_sound_stop(bapi_sound_t sound)
 
 void bapi_sound_update(void)
 {
+	if (!audio_is_supported()) return;
+
 	const plat_interface_t *plat  = plat_get();
 	bapi_sound_t			sound = active_sounds;
 
@@ -265,6 +310,8 @@ void bapi_sound_update(void)
 
 void bapi_sound_free(bapi_sound_t sound)
 {
+	if (!audio_is_supported()) return;
+
 	if (sound != NULL) {
 		const plat_interface_t *plat = plat_get();
 
@@ -275,6 +322,7 @@ void bapi_sound_free(bapi_sound_t sound)
 		if (sound->stream != NULL) {
 			plat->audio.destroy_audio_stream(sound->stream);
 		}
+		remove_allocated_sound(sound);
 		free(sound);
 	}
 }

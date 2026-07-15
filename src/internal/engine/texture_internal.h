@@ -9,4 +9,7 @@ struct bapi_texture_internal {
 	int			   height;
 	int			   reference_count;
 	char		  *cache_key;
+	struct bapi_texture_internal *next_allocated;
 };
+
+void bapi_texture_cleanup(void);
