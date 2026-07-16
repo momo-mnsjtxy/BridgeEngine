@@ -32,3 +32,48 @@ jobs:
           cmake --build build-xj380-fetch --target xj380_staticlib
           test -d build-xj380-fetch/_deps/xj380_sdk-src/include
           test -d build-xj380-fetch/_deps/xj380_sdk-src/obj-gui
+
+  product:
+    name: product (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux FFmpeg development packages
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev
+      - name: Install macOS FFmpeg
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg pkg-config
+      - name: Set up vcpkg
+        if: runner.os == 'Windows'
+        uses: lukka/run-vcpkg@v11
+      - name: Install Windows FFmpeg
+        if: runner.os == 'Windows'
+        run: vcpkg install ffmpeg:x64-windows
+      - name: Configure Unix product build
+        if: runner.os != 'Windows'
+        run: >-
+          cmake -S . -B build-product
+          -DBRIDGEENGINE_BUILD_SHARED=ON
+          -DBRIDGEENGINE_BUILD_STATIC=ON
+          -DBRIDGEENGINE_BUILD_EXAMPLES=ON
+          -DBRIDGEENGINE_BUILD_TESTS=OFF
+          -DBRIDGEENGINE_BUILD_XJ380=OFF
+      - name: Configure Windows product build
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          cmake -S . -B build-product
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows
+          -DBRIDGEENGINE_BUILD_SHARED=ON
+          -DBRIDGEENGINE_BUILD_STATIC=ON
+          -DBRIDGEENGINE_BUILD_EXAMPLES=ON
+          -DBRIDGEENGINE_BUILD_TESTS=OFF
+          -DBRIDGEENGINE_BUILD_XJ380=OFF
+      - name: Build product targets
+        run: cmake --build build-product --config Release

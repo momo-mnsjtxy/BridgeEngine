@@ -190,7 +190,13 @@ if(BRIDGEENGINE_BUILD_SHARED OR BRIDGEENGINE_BUILD_STATIC OR BRIDGEENGINE_BUILD_
 				"libswscale-dev libswresample-dev pkg-config\n"
 				"macOS: brew install ffmpeg pkg-config")
 		endif()
-		set(BRIDGEENGINE_PLATFORM_LIBS ${BRIDGEENGINE_SDL_LIBS} PkgConfig::FFMPEG GL m)
+		if(APPLE)
+			find_library(BRIDGEENGINE_OPENGL_FRAMEWORK OpenGL REQUIRED)
+			set(BRIDGEENGINE_PLATFORM_LIBS ${BRIDGEENGINE_SDL_LIBS} PkgConfig::FFMPEG
+				${BRIDGEENGINE_OPENGL_FRAMEWORK} m)
+		else()
+			set(BRIDGEENGINE_PLATFORM_LIBS ${BRIDGEENGINE_SDL_LIBS} PkgConfig::FFMPEG GL m)
+		endif()
 	endif()
 endif()
 
@@ -431,6 +437,11 @@ endif()
 if(BRIDGEENGINE_BUILD_STATIC)
 	add_library(bridgeengine_static STATIC ${BRIDGEENGINE_SOURCES})
 	set_target_properties(bridgeengine_static PROPERTIES OUTPUT_NAME bridgeengine)
+	if(WIN32 AND BRIDGEENGINE_BUILD_SHARED)
+		set_target_properties(bridgeengine_static PROPERTIES
+			ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/lib/static"
+		)
+	endif()
 	bridgeengine_configure_target(bridgeengine_static)
 	add_library(BridgeEngine::static ALIAS bridgeengine_static)
 endif()
