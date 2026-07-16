@@ -11,6 +11,8 @@ project(BridgeEngine VERSION 2.0.0 LANGUAGES C CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(FetchContent)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Generate compile_commands.json" FORCE)
 
 option(BRIDGEENGINE_BUILD_SHARED "Build the shared BridgeEngine library" ON)
@@ -633,13 +635,32 @@ endif()
 if(BRIDGEENGINE_INSTALL_TARGETS)
 	install(TARGETS ${BRIDGEENGINE_INSTALL_TARGETS}
 		EXPORT BridgeEngineTargets
-		ARCHIVE DESTINATION lib
-		LIBRARY DESTINATION lib
-		RUNTIME DESTINATION bin
+		ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+		RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 	)
 endif()
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/" DESTINATION include
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 	FILES_MATCHING PATTERN "*.h"
 )
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/bridgeengine_version.h" DESTINATION include)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/bridgeengine_version.h" DESTINATION include)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/bridgeengine_version.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+configure_package_config_file(
+	"${CMAKE_CURRENT_SOURCE_DIR}/cmake/BridgeEngineConfig.cmake.in"
+	"${CMAKE_CURRENT_BINARY_DIR}/BridgeEngineConfig.cmake"
+	INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/BridgeEngine"
+)
+write_basic_package_version_file(
+	"${CMAKE_CURRENT_BINARY_DIR}/BridgeEngineConfigVersion.cmake"
+	VERSION ${PROJECT_VERSION}
+	COMPATIBILITY SameMajorVersion
+)
+install(EXPORT BridgeEngineTargets
+	NAMESPACE BridgeEngine::
+	DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/BridgeEngine"
+)
+install(FILES
+	"${CMAKE_CURRENT_BINARY_DIR}/BridgeEngineConfig.cmake"
+	"${CMAKE_CURRENT_BINARY_DIR}/BridgeEngineConfigVersion.cmake"
+	"${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindFFmpeg.cmake"
+	DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/BridgeEngine"
+)
