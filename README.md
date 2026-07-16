@@ -26,26 +26,40 @@ BridgeEngine 是一个跨平台 2D 图形引擎，提供简洁的 C API。桌面
 
 ## 依赖
 
-- SDL3 + SDL3_image + SDL3_ttf
-- FFmpeg (libavcodec, libavformat, libavutil, libswscale, libswresample)
+- SDL3 + SDL3_image + SDL3_ttf（优先使用已安装依赖；缺失时 CMake 自动下载固定源码版本）
+- FFmpeg 开发库（libavcodec、libavformat、libavutil、libswscale、libswresample）
 - OpenGL (Linux) 或 opengl32 (Windows)
 - CMake >= 3.20
 - C11 编译器 (GCC/Clang/MSVC)
 
 ### 安装依赖
 
-```bash
-# Windows (vcpkg)
-vcpkg install sdl3 sdl3-image sdl3-ttf ffmpeg
+SDL3、SDL3_image 和 SDL3_ttf 不需要预先安装。CMake 会优先采用 `CMAKE_PREFIX_PATH`、vcpkg
+toolchain 或系统包；均不可用时自动通过 `FetchContent` 下载 SDL3 3.4.12、SDL3_image 3.4.4、
+SDL3_ttf 3.2.2 到构建目录的 `_deps/`。可用 `-DBRIDGEENGINE_FETCH_SDL=OFF` 禁用自动下载。
 
+FFmpeg 始终是外部开发依赖，不会由 CMake 自动构建：
+
+```bash
 # macOS (Homebrew)
 brew install sdl3 sdl3_image sdl3_ttf ffmpeg
 
 # Linux (apt)
 sudo apt install libsdl3-dev libsdl3-image-dev libsdl3-ttf-dev \
-                 libavcodec-dev libavformat-dev libavutil-dev \
-                 libswscale-dev libswresample-dev
+                  libavcodec-dev libavformat-dev libavutil-dev \
+                  libswscale-dev libswresample-dev
 ```
+
+Windows 请在 PowerShell 执行：
+
+```powershell
+.\scripts\bootstrap-vcpkg.ps1
+```
+
+脚本会检查 Visual Studio Build Tools 的 C++ 工作负载，并在指定依赖目录（默认
+`.bridgeengine-deps/vcpkg`）中引导 vcpkg，无需管理员权限。它默认构建 `ffmpeg:x64-windows`；
+可用 `-Triplet` 或 `VCPKG_TARGET_TRIPLET` 环境变量覆盖目标 triplet。完成后使用脚本输出的 `CMAKE_TOOLCHAIN_FILE` 和
+`VCPKG_TARGET_TRIPLET` 参数配置 CMake。
 
 ---
 
@@ -68,22 +82,22 @@ CMake 默认生成 `build/compile_commands.json`，并构建：
 - `bridgeengine_text_example`
 - `bridgeengine_log_example`
 
-请求桌面库或示例时，CMake 会在配置阶段检查 SDL3、SDL3_image、SDL3_ttf 和 FFmpeg；依赖缺失会直接失败。
+请求桌面库或示例时，CMake 会解析 SDL3、SDL3_image、SDL3_ttf 和 FFmpeg。SDL 依赖缺失时自动
+下载固定版本；缺少 FFmpeg 时会显示按平台安装 `avcodec`、`avformat`、`avutil`、`swscale`、
+`swresample` 的修复指引。
 
 ### XJ380
 
-XJ380 SDK 是本地依赖，不进入 Git。CMake 会按以下顺序自动查找可用 SDK：
-
-1. `XJ380_XACT_2026v4_xj380/depend`
-2. `XJ380_XACT_2026v4_linux/depend`
-3. `XJ380_XACT_2026v4_Windows/depend`
-
-每个候选目录都应包含：
+XJ380 SDK 不进入 Git。优先在配置时指定 `XJ380_SDK`，其值应指向 SDK 解压后的
+`XJ380_CPP_API_Depend_1_3` 目录：
 
 ```text
-XJ380_XACT_2026v4_xj380/depend/include
-XJ380_XACT_2026v4_xj380/depend/obj-gui
+XJ380_CPP_API_Depend_1_3/include
+XJ380_CPP_API_Depend_1_3/obj-gui
 ```
+
+未指定时，CMake 会从 XXCC-suite 的 2026v4 Release 下载 ZIP 到构建目录的 `_deps/`，并校验
+SHA-256。使用 `-DBRIDGEENGINE_FETCH_XJ380=OFF` 可禁用自动下载，此时必须提供 `XJ380_SDK`。
 
 构建目标：
 
@@ -97,7 +111,7 @@ cmake --build --preset xj380 --target xj380_epf
 若 SDK 位于其他位置，可在配置时指定：
 
 ```bash
-cmake --preset xj380 -DXJ380_SDK=/实际路径/depend
+cmake --preset xj380 -DXJ380_SDK=/实际路径/XJ380_CPP_API_Depend_1_3
 ```
 
 外部 XJ380 项目应先构建 `xj380_package`，再将 `build/xj380/package/include/` 和
@@ -159,6 +173,7 @@ BridgeEngine/
 ├── tests/              # 回归测试
 ├── docs/               # 架构与 API 文档
 ├── cmake/              # CMake 模块
+├── scripts/            # 本地依赖引导脚本
 ├── CMakeLists.txt
 └── README.md
 ```

@@ -1,8 +1,16 @@
 cmake_minimum_required(VERSION 3.20)
 
+if(POLICY CMP0135)
+	cmake_policy(SET CMP0135 NEW)
+endif()
+if(POLICY CMP0169)
+	cmake_policy(SET CMP0169 OLD)
+endif()
+
 project(BridgeEngine VERSION 2.0.0 LANGUAGES C CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(FetchContent)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Generate compile_commands.json" FORCE)
 
 option(BRIDGEENGINE_BUILD_SHARED "Build the shared BridgeEngine library" ON)
@@ -10,6 +18,13 @@ option(BRIDGEENGINE_BUILD_STATIC "Build the static BridgeEngine library" ON)
 option(BRIDGEENGINE_BUILD_EXAMPLES "Build BridgeEngine example executables" ON)
 option(BRIDGEENGINE_BUILD_XJ380 "Enable XJ380 custom build targets" ON)
 option(BRIDGEENGINE_BUILD_TESTS "Build BridgeEngine regression tests" ON)
+option(BRIDGEENGINE_FETCH_SDL "Fetch SDL3 dependencies when they are unavailable" ON)
+option(BRIDGEENGINE_FETCH_XJ380 "Fetch the XJ380 SDK when XJ380_SDK is unset" ON)
+
+set(BRIDGEENGINE_FETCHCONTENT_TIMESTAMP_ARGS)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
+	list(APPEND BRIDGEENGINE_FETCHCONTENT_TIMESTAMP_ARGS DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+endif()
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -69,46 +84,111 @@ set(BRIDGEENGINE_SOURCES
 )
 
 if(BRIDGEENGINE_BUILD_SHARED OR BRIDGEENGINE_BUILD_STATIC OR BRIDGEENGINE_BUILD_EXAMPLES)
+	find_package(SDL3 CONFIG QUIET)
+	find_package(SDL3_image CONFIG QUIET)
+	find_package(SDL3_ttf CONFIG QUIET)
 	find_package(PkgConfig QUIET)
 
-	if(WIN32)
-		find_package(SDL3 CONFIG REQUIRED)
-		find_package(SDL3_image CONFIG REQUIRED)
-		find_package(SDL3_ttf CONFIG REQUIRED)
-		find_package(FFmpeg REQUIRED)
+	if(PkgConfig_FOUND)
+		pkg_check_modules(SDL3 QUIET IMPORTED_TARGET sdl3)
+		pkg_check_modules(SDL3_IMAGE QUIET IMPORTED_TARGET sdl3-image)
+		pkg_check_modules(SDL3_TTF QUIET IMPORTED_TARGET sdl3-ttf)
+	endif()
 
+	if(TARGET SDL3::SDL3)
+		set(BRIDGEENGINE_SDL3_TARGET SDL3::SDL3)
+	elseif(TARGET PkgConfig::SDL3)
+		set(BRIDGEENGINE_SDL3_TARGET PkgConfig::SDL3)
+	else()
+		if(NOT BRIDGEENGINE_FETCH_SDL)
+			message(FATAL_ERROR "SDL3 was not found. Install it or configure with -DBRIDGEENGINE_FETCH_SDL=ON.")
+		endif()
+		set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+		set(SDL_STATIC ON CACHE BOOL "" FORCE)
+		set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+		FetchContent_Declare(sdl3
+			URL https://github.com/libsdl-org/SDL/releases/download/release-3.4.12/SDL3-3.4.12.tar.gz
+			URL_HASH SHA256=f07b958a9ac5020fb7a44cadb957f658b2149c3c8abb4f63145fac9303249db7
+			${BRIDGEENGINE_FETCHCONTENT_TIMESTAMP_ARGS}
+		)
+		FetchContent_MakeAvailable(sdl3)
+		set(BRIDGEENGINE_SDL3_TARGET SDL3::SDL3)
+	endif()
+
+	if(TARGET SDL3_image::SDL3_image)
+		set(BRIDGEENGINE_SDL3_IMAGE_TARGET SDL3_image::SDL3_image)
+	elseif(TARGET PkgConfig::SDL3_IMAGE)
+		set(BRIDGEENGINE_SDL3_IMAGE_TARGET PkgConfig::SDL3_IMAGE)
+	else()
+		if(NOT BRIDGEENGINE_FETCH_SDL)
+			message(FATAL_ERROR "SDL3_image was not found. Install it or configure with -DBRIDGEENGINE_FETCH_SDL=ON.")
+		endif()
+		set(SDLIMAGE_VENDORED ON CACHE BOOL "" FORCE)
+		FetchContent_Declare(sdl3_image
+			URL https://github.com/libsdl-org/SDL_image/releases/download/release-3.4.4/SDL3_image-3.4.4.tar.gz
+			URL_HASH SHA256=29751304a13d25ac513f24305fa25b06a6edd9607718c90129b8350d35fc5573
+			${BRIDGEENGINE_FETCHCONTENT_TIMESTAMP_ARGS}
+		)
+		FetchContent_MakeAvailable(sdl3_image)
+		set(BRIDGEENGINE_SDL3_IMAGE_TARGET SDL3_image::SDL3_image)
+	endif()
+
+	if(TARGET SDL3_ttf::SDL3_ttf)
+		set(BRIDGEENGINE_SDL3_TTF_TARGET SDL3_ttf::SDL3_ttf)
+	elseif(TARGET PkgConfig::SDL3_TTF)
+		set(BRIDGEENGINE_SDL3_TTF_TARGET PkgConfig::SDL3_TTF)
+	else()
+		if(NOT BRIDGEENGINE_FETCH_SDL)
+			message(FATAL_ERROR "SDL3_ttf was not found. Install it or configure with -DBRIDGEENGINE_FETCH_SDL=ON.")
+		endif()
+		set(SDLTTF_VENDORED ON CACHE BOOL "" FORCE)
+		FetchContent_Declare(sdl3_ttf
+			URL https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz
+			URL_HASH SHA256=63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
+			${BRIDGEENGINE_FETCHCONTENT_TIMESTAMP_ARGS}
+		)
+		FetchContent_MakeAvailable(sdl3_ttf)
+		set(BRIDGEENGINE_SDL3_TTF_TARGET SDL3_ttf::SDL3_ttf)
+	endif()
+	set(BRIDGEENGINE_SDL_LIBS
+		${BRIDGEENGINE_SDL3_TARGET}
+		${BRIDGEENGINE_SDL3_IMAGE_TARGET}
+		${BRIDGEENGINE_SDL3_TTF_TARGET}
+	)
+
+	if(WIN32)
+		find_package(FFmpeg QUIET)
+		if(NOT FFmpeg_FOUND)
+			message(FATAL_ERROR
+				"FFmpeg development libraries are required: avcodec, avformat, avutil, swscale, swresample.\n"
+				"Windows: run scripts\\bootstrap-vcpkg.ps1, then configure with\n"
+				"-DCMAKE_TOOLCHAIN_FILE=<vcpkg>\\scripts\\buildsystems\\vcpkg.cmake\n"
+				"-DVCPKG_TARGET_TRIPLET=x64-windows.")
+		endif()
 		set(BRIDGEENGINE_PLATFORM_LIBS
-			SDL3::SDL3 SDL3_image::SDL3_image SDL3_ttf::SDL3_ttf
+			${BRIDGEENGINE_SDL_LIBS}
 			FFmpeg::avcodec FFmpeg::avformat FFmpeg::avutil FFmpeg::swscale FFmpeg::swresample
 			opengl32 gdi32 user32 kernel32 shell32
 		)
 		set(BRIDGEENGINE_PLATFORM_INCLUDES ${FFmpeg_INCLUDE_DIRS})
 	else()
-		pkg_check_modules(SDL3 REQUIRED sdl3)
-		pkg_check_modules(SDL3_IMAGE REQUIRED sdl3-image)
-		pkg_check_modules(SDL3_TTF REQUIRED sdl3-ttf)
-		pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libavutil libswscale libswresample)
-
-		set(BRIDGEENGINE_PLATFORM_LIBS
-			${SDL3_LIBRARIES}
-			${SDL3_IMAGE_LIBRARIES}
-			${SDL3_TTF_LIBRARIES}
-			${FFMPEG_LIBRARIES}
-			GL
-			m
+		if(NOT PkgConfig_FOUND)
+			message(FATAL_ERROR
+				"FFmpeg development libraries are required: avcodec, avformat, avutil, swscale, swresample.\n"
+				"Install pkg-config and FFmpeg development packages (Linux: libavcodec-dev libavformat-dev "
+				"libavutil-dev libswscale-dev libswresample-dev; macOS: brew install ffmpeg pkg-config).")
+		endif()
+		pkg_check_modules(FFMPEG QUIET IMPORTED_TARGET
+			libavcodec libavformat libavutil libswscale libswresample
 		)
-		set(BRIDGEENGINE_PLATFORM_INCLUDES
-			${SDL3_INCLUDE_DIRS}
-			${SDL3_IMAGE_INCLUDE_DIRS}
-			${SDL3_TTF_INCLUDE_DIRS}
-			${FFMPEG_INCLUDE_DIRS}
-		)
-		set(BRIDGEENGINE_PLATFORM_LINK_DIRS
-			${SDL3_LIBRARY_DIRS}
-			${SDL3_IMAGE_LIBRARY_DIRS}
-			${SDL3_TTF_LIBRARY_DIRS}
-			${FFMPEG_LIBRARY_DIRS}
-		)
+		if(NOT FFMPEG_FOUND)
+			message(FATAL_ERROR
+				"FFmpeg development libraries are required: avcodec, avformat, avutil, swscale, swresample.\n"
+				"Linux (Debian/Ubuntu): sudo apt install libavcodec-dev libavformat-dev libavutil-dev "
+				"libswscale-dev libswresample-dev pkg-config\n"
+				"macOS: brew install ffmpeg pkg-config")
+		endif()
+		set(BRIDGEENGINE_PLATFORM_LIBS ${BRIDGEENGINE_SDL_LIBS} PkgConfig::FFMPEG GL m)
 	endif()
 endif()
 
@@ -339,26 +419,24 @@ if(BRIDGEENGINE_BUILD_EXAMPLES)
 endif()
 
 if(BRIDGEENGINE_BUILD_XJ380)
-	set(XJ380_SDK_CANDIDATES
-		"${CMAKE_CURRENT_SOURCE_DIR}/XJ380_XACT_2026v4_xj380/depend"
-		"${CMAKE_CURRENT_SOURCE_DIR}/XJ380_XACT_2026v4_linux/depend"
-		"${CMAKE_CURRENT_SOURCE_DIR}/XJ380_XACT_2026v4_Windows/depend"
-	)
-	set(XJ380_SDK_DEFAULT "")
-	foreach(candidate IN LISTS XJ380_SDK_CANDIDATES)
-		if(IS_DIRECTORY "${candidate}/include" AND IS_DIRECTORY "${candidate}/obj-gui")
-			set(XJ380_SDK_DEFAULT "${candidate}")
-			break()
+	set(XJ380_SDK "${XJ380_SDK}" CACHE PATH "Path to XJ380_CPP_API_Depend_1_3")
+	if(NOT XJ380_SDK)
+		if(NOT BRIDGEENGINE_FETCH_XJ380)
+			message(FATAL_ERROR
+				"XJ380_SDK is not set. Set it to XJ380_CPP_API_Depend_1_3 or configure with "
+				"-DBRIDGEENGINE_FETCH_XJ380=ON.")
 		endif()
-	endforeach()
-	if(NOT XJ380_SDK_DEFAULT)
-		list(GET XJ380_SDK_CANDIDATES 0 XJ380_SDK_DEFAULT)
-	endif()
-	set(XJ380_SDK_LEGACY_DEFAULT "${CMAKE_CURRENT_SOURCE_DIR}/XJ380_XACT_2026v4_xj380/depend")
-	if(NOT DEFINED XJ380_SDK OR XJ380_SDK STREQUAL XJ380_SDK_LEGACY_DEFAULT)
-		set(XJ380_SDK "${XJ380_SDK_DEFAULT}" CACHE PATH "Path to the XJ380 SDK depend directory" FORCE)
-	else()
-		set(XJ380_SDK "${XJ380_SDK}" CACHE PATH "Path to the XJ380 SDK depend directory")
+		FetchContent_Declare(xj380_sdk
+			URL https://github.com/xingji-studio/XXCC-suite/releases/download/2026v4/XJ380_CPP_API_Depend_1_3.zip
+			URL_HASH SHA256=5c3ba1c31393c19ddc5a3ad52618474c156924895c32edc9729743b2ea9fff28
+			${BRIDGEENGINE_FETCHCONTENT_TIMESTAMP_ARGS}
+		)
+		FetchContent_GetProperties(xj380_sdk)
+		if(NOT xj380_sdk_POPULATED)
+			FetchContent_Populate(xj380_sdk)
+		endif()
+		set(XJ380_SDK "${xj380_sdk_SOURCE_DIR}" CACHE PATH
+			"Path to XJ380_CPP_API_Depend_1_3" FORCE)
 	endif()
 	set(XJ380_CC clang CACHE FILEPATH "XJ380 C compiler")
 	set(XJ380_CXX clang++ CACHE FILEPATH "XJ380 C++ compiler")
