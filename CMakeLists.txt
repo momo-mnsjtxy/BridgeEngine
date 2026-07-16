@@ -639,28 +639,28 @@ if(BRIDGEENGINE_INSTALL_TARGETS)
 		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 		RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 	)
+	configure_package_config_file(
+		"${CMAKE_CURRENT_SOURCE_DIR}/cmake/BridgeEngineConfig.cmake.in"
+		"${CMAKE_CURRENT_BINARY_DIR}/BridgeEngineConfig.cmake"
+		INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/BridgeEngine"
+	)
+	write_basic_package_version_file(
+		"${CMAKE_CURRENT_BINARY_DIR}/BridgeEngineConfigVersion.cmake"
+		VERSION ${PROJECT_VERSION}
+		COMPATIBILITY SameMajorVersion
+	)
+	install(EXPORT BridgeEngineTargets
+		NAMESPACE BridgeEngine::
+		DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/BridgeEngine"
+	)
+	install(FILES
+		"${CMAKE_CURRENT_BINARY_DIR}/BridgeEngineConfig.cmake"
+		"${CMAKE_CURRENT_BINARY_DIR}/BridgeEngineConfigVersion.cmake"
+		"${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindFFmpeg.cmake"
+		DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/BridgeEngine"
+	)
 endif()
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 	FILES_MATCHING PATTERN "*.h"
 )
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/generated/bridgeengine_version.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-configure_package_config_file(
-	"${CMAKE_CURRENT_SOURCE_DIR}/cmake/BridgeEngineConfig.cmake.in"
-	"${CMAKE_CURRENT_BINARY_DIR}/BridgeEngineConfig.cmake"
-	INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/BridgeEngine"
-)
-write_basic_package_version_file(
-	"${CMAKE_CURRENT_BINARY_DIR}/BridgeEngineConfigVersion.cmake"
-	VERSION ${PROJECT_VERSION}
-	COMPATIBILITY SameMajorVersion
-)
-install(EXPORT BridgeEngineTargets
-	NAMESPACE BridgeEngine::
-	DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/BridgeEngine"
-)
-install(FILES
-	"${CMAKE_CURRENT_BINARY_DIR}/BridgeEngineConfig.cmake"
-	"${CMAKE_CURRENT_BINARY_DIR}/BridgeEngineConfigVersion.cmake"
-	"${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindFFmpeg.cmake"
-	DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/BridgeEngine"
-)
