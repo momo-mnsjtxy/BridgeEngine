@@ -25,10 +25,9 @@ jobs:
           -DBRIDGEENGINE_BUILD_TESTS=ON
       - name: Run regression targets
         run: cmake --build build-test && ctest --test-dir build-test --output-on-failure
-      - name: Verify missing XJ380 SDK fails clearly
+      - name: Build XJ380 with the fetched SDK
         run: |
-          cmake -S . -B build-xj380 -DBRIDGEENGINE_BUILD_SHARED=OFF -DBRIDGEENGINE_BUILD_STATIC=OFF -DBRIDGEENGINE_BUILD_EXAMPLES=OFF -DBRIDGEENGINE_BUILD_XJ380=ON
-          if cmake --build build-xj380 --target check_xj380_sdk; then
-            echo "Expected XJ380 SDK validation to fail without a local SDK."
-            exit 1
-          fi
+          cmake -S . -B build-xj380-fetch -DBRIDGEENGINE_BUILD_SHARED=OFF -DBRIDGEENGINE_BUILD_STATIC=OFF -DBRIDGEENGINE_BUILD_EXAMPLES=OFF -DBRIDGEENGINE_BUILD_TESTS=OFF -DBRIDGEENGINE_BUILD_XJ380=ON -DXJ380_SDK=
+          cmake --build build-xj380-fetch --target xj380_staticlib
+          test -d build-xj380-fetch/_deps/xj380_sdk-src/include
+          test -d build-xj380-fetch/_deps/xj380_sdk-src/obj-gui
