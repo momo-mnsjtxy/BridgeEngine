@@ -20,9 +20,10 @@ jobs:
           cmake -S . -B build-test
           -DBRIDGEENGINE_BUILD_SHARED=OFF
           -DBRIDGEENGINE_BUILD_STATIC=OFF
-          -DBRIDGEENGINE_BUILD_EXAMPLES=OFF
-          -DBRIDGEENGINE_BUILD_XJ380=OFF
-          -DBRIDGEENGINE_BUILD_TESTS=ON
+           -DBRIDGEENGINE_BUILD_EXAMPLES=OFF
+           -DBRIDGEENGINE_BUILD_XJ380=OFF
+           -DBRIDGEENGINE_BUILD_TESTS=ON
+           -DBRIDGEENGINE_ENABLE_ASAN=ON
       - name: Run regression targets
         run: cmake --build build-test && ctest --test-dir build-test --output-on-failure
       - name: Build XJ380 with the fetched SDK

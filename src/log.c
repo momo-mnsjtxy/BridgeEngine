@@ -145,10 +145,28 @@ void bapi_log_set_level(bapi_log_level_t level)
 	g_log_state.min_level = level;
 }
 
+static int append_format(char *buffer, size_t buffer_size, size_t *length, const char *format, ...)
+{
+	if (buffer_size == 0 || *length >= buffer_size) return 1;
+
+	va_list args;
+	va_start(args, format);
+	int written = vsnprintf(buffer + *length, buffer_size - *length, format, args);
+	va_end(args);
+	if (written < 0 || (size_t)written >= buffer_size - *length) {
+		buffer[buffer_size - 1] = '\0';
+		return 1;
+	}
+	*length += (size_t)written;
+	return 0;
+}
+
 static void format_message(char *buffer, size_t buffer_size, bapi_log_level_t level,
 						   const char *file, int line, const char *func, const char *format,
 						   va_list args)
 {
+	if (buffer_size == 0) return;
+	buffer[0] = '\0';
 	char timestamp[32];
 	get_timestamp(timestamp, sizeof(timestamp));
 
@@ -158,22 +176,25 @@ static void format_message(char *buffer, size_t buffer_size, bapi_log_level_t le
 	}
 	filename = (filename != NULL) ? filename + 1 : file;
 
-	int pos = 0;
+	size_t length = 0;
 
 	if (g_log_state.use_colors) {
-		pos += snprintf(buffer + pos, buffer_size - pos, "%s", get_level_color(level));
+		if (append_format(buffer, buffer_size, &length, "%s", get_level_color(level))) return;
 	}
 
-	pos +=
-		snprintf(buffer + pos, buffer_size - pos, "[%s] [%s] ", timestamp, get_level_string(level));
-
-	pos += snprintf(buffer + pos, buffer_size - pos, "[%s:%d] %s(): ", filename, line, func);
-
-	vsnprintf(buffer + pos, buffer_size - pos, format, args);
+	if (append_format(buffer, buffer_size, &length, "[%s] [%s] ", timestamp,
+				  get_level_string(level)))
+		return;
+	if (append_format(buffer, buffer_size, &length, "[%s:%d] %s(): ", filename, line, func)) return;
+	int written = vsnprintf(buffer + length, buffer_size - length, format, args);
+	if (written < 0 || (size_t)written >= buffer_size - length) {
+		buffer[buffer_size - 1] = '\0';
+		return;
+	}
+	length += (size_t)written;
 
 	if (g_log_state.use_colors) {
-		size_t len = strlen(buffer);
-		snprintf(buffer + len, buffer_size - len, "\033[0m");
+		append_format(buffer, buffer_size, &length, "\033[0m");
 	}
 }
 

@@ -20,6 +20,7 @@ option(BRIDGEENGINE_BUILD_XJ380 "Enable XJ380 custom build targets" ON)
 option(BRIDGEENGINE_BUILD_TESTS "Build BridgeEngine regression tests" ON)
 option(BRIDGEENGINE_FETCH_SDL "Fetch SDL3 dependencies when they are unavailable" ON)
 option(BRIDGEENGINE_FETCH_XJ380 "Fetch the XJ380 SDK when XJ380_SDK is unset" ON)
+option(BRIDGEENGINE_ENABLE_ASAN "Enable AddressSanitizer for supported regression tests" OFF)
 
 set(BRIDGEENGINE_FETCHCONTENT_TIMESTAMP_ARGS)
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
@@ -383,6 +384,22 @@ if(BRIDGEENGINE_BUILD_TESTS)
 		"${CMAKE_CURRENT_SOURCE_DIR}/src"
 	)
 	add_test(NAME bridgeengine.text_assets COMMAND bridgeengine_text_asset_test)
+
+	add_executable(bridgeengine_log_test
+		tests/log_test.c
+		src/log.c
+		src/platform/platform.c
+	)
+	target_include_directories(bridgeengine_log_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	if(BRIDGEENGINE_ENABLE_ASAN AND CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+		target_compile_options(bridgeengine_log_test PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+		target_link_options(bridgeengine_log_test PRIVATE -fsanitize=address)
+	endif()
+	add_test(NAME bridgeengine.log COMMAND bridgeengine_log_test "${CMAKE_CURRENT_BINARY_DIR}/bridgeengine.log")
 endif()
 
 if(BRIDGEENGINE_BUILD_SHARED)
