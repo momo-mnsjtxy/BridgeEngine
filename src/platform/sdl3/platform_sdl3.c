@@ -1,5 +1,6 @@
 #include "internal/platform/platform.h"
 #include "internal/platform/platform_types.h"
+#include "internal/platform/sdl_keycode.h"
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 #include <SDL3_ttf/SDL_ttf.h>
@@ -39,6 +40,7 @@ struct plat_surface {
 	SDL_Surface *surface;
 };
 
+#if 0
 static uint8_t sdlkeycode_convert_table[0x80] = {
 	' ', ' ', ' ',	' ', ' ', ' ', ' ', ' ', '\b', PLAT_KEY_TAB, ' ', ' ', ' ',			 ' ', ' ',
 	' ', ' ', ' ',	' ', ' ', ' ', ' ', ' ', ' ',  ' ',			 ' ', ' ', PLAT_KEY_ESC, ' ', ' ',
@@ -197,14 +199,11 @@ static uint8_t sdlspkeycode_convert_table[0x90] = {
 	' ',
 	' ',
 };
+#endif
 
 static uint8_t convert_sdl_keycode(SDL_Keycode key)
 {
-	if (key < 0x80) {
-		return sdlkeycode_convert_table[key];
-	} else {
-		return sdlspkeycode_convert_table[key - 0x40000039u];
-	}
+	return bapi_sdl_keycode_convert((uint32_t)key);
 }
 
 static int sdl3_init(uint32_t flags)

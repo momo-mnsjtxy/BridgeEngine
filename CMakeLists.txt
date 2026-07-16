@@ -50,6 +50,7 @@ configure_file(
 set(BRIDGEENGINE_PLATFORM_SOURCES
 	src/platform/platform.c
 	src/platform/sdl3/platform_sdl3.c
+	src/platform/sdl3/keycode.c
 )
 set(BRIDGEENGINE_CORE_SOURCES
 	src/core/render_context.c
@@ -285,6 +286,24 @@ if(BRIDGEENGINE_BUILD_TESTS)
 	)
 	target_link_libraries(bridgeengine_math_geometry_test PRIVATE m)
 	add_test(NAME bridgeengine.math_geometry COMMAND bridgeengine_math_geometry_test)
+
+	add_executable(bridgeengine_sdl_keycode_test
+		tests/sdl_keycode_test.c
+		src/platform/sdl3/keycode.c
+	)
+	target_include_directories(bridgeengine_sdl_keycode_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+	add_test(NAME bridgeengine.sdl_keycode COMMAND bridgeengine_sdl_keycode_test)
+
+	add_executable(bridgeengine_input_unknown_key_test
+		tests/input_unknown_key_test.c
+		src/input/input.c
+	)
+	target_include_directories(bridgeengine_input_unknown_key_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.input_unknown_key COMMAND bridgeengine_input_unknown_key_test)
 
 	add_executable(bridgeengine_lifecycle_test
 		tests/lifecycle_test.c

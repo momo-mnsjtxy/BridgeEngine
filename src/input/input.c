@@ -45,12 +45,12 @@ void bapi_input_handle_event(const bapi_event_t *event)
 	switch (type) {
 	case BAPI_EVENT_KEY_DOWN: {
 		uint8_t key		  = bapi_event_get_key_code(event);
-		g_input.keys[key] = 1;
+		if (key != 0) g_input.keys[key] = 1;
 		break;
 	}
 	case BAPI_EVENT_KEY_UP: {
 		uint8_t key		  = bapi_event_get_key_code(event);
-		g_input.keys[key] = 0;
+		if (key != 0) g_input.keys[key] = 0;
 		break;
 	}
 	case BAPI_EVENT_MOUSE_BUTTON_DOWN:
