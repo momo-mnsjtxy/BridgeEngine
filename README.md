@@ -50,6 +50,17 @@ sudo apt install libsdl3-dev libsdl3-image-dev libsdl3-ttf-dev \
                   libswscale-dev libswresample-dev
 ```
 
+若 Linux 或 macOS 没有可用包管理器，可从官方源码构建到项目本地目录：
+
+```bash
+./scripts/bootstrap-ffmpeg.sh
+PKG_CONFIG_PATH="$PWD/.bridgeengine-deps/ffmpeg/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" \
+  cmake --preset default
+```
+
+脚本固定 FFmpeg 7.1.1 并校验 SHA-256，只构建 BridgeEngine 所需的
+`avcodec`、`avformat`、`avutil`、`swscale`、`swresample` 相关库。传入第一个参数可指定安装前缀。
+
 Windows 请在 PowerShell 执行：
 
 ```powershell
