@@ -58,8 +58,8 @@ PKG_CONFIG_PATH="$PWD/.bridgeengine-deps/ffmpeg/lib/pkgconfig${PKG_CONFIG_PATH:+
   cmake --preset default
 ```
 
-脚本固定 FFmpeg 7.1.1 并校验 SHA-256，只构建 BridgeEngine 所需的
-`avcodec`、`avformat`、`avutil`、`swscale`、`swresample` 相关库。传入第一个参数可指定安装前缀。
+脚本固定 FFmpeg 7.1.1 并校验 SHA-256，构建包含 BridgeEngine 所需
+`avcodec`、`avformat`、`avutil`、`swscale`、`swresample` 的 FFmpeg。传入第一个参数可指定安装前缀。
 
 Windows 请在 PowerShell 执行：
 
