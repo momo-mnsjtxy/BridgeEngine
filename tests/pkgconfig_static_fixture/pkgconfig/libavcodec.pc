@@ -4,4 +4,6 @@ libdir=${prefix}
 Name: libavcodec
 Description: BridgeEngine static pkg-config fixture
 Version: 1.0
+private_libdir=/tmp/bridgeengine-fixture-private
 Libs: -L${libdir} -lfixture_avcodec
+Libs.private: -L${private_libdir} -lfixture_avcodec_private

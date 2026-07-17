@@ -14,6 +14,13 @@ if(@BRIDGEENGINE_BUILD_STATIC@)
 			# A target supplied by the consumer is an explicit dependency override.
 			if(NOT TARGET PkgConfig::${prefix})
 				set(bridgeengine_static_link_options "${${prefix}_STATIC_LDFLAGS_OTHER}")
+				set(bridgeengine_static_link_directories "${${prefix}_STATIC_LIBRARY_DIRS}")
+				foreach(bridgeengine_link_flag IN LISTS ${prefix}_STATIC_LDFLAGS)
+					if(bridgeengine_link_flag MATCHES "^-L(.+)")
+						list(APPEND bridgeengine_static_link_directories "${CMAKE_MATCH_1}")
+					endif()
+				endforeach()
+				list(REMOVE_DUPLICATES bridgeengine_static_link_directories)
 				if(APPLE)
 					set(bridgeengine_static_link_options)
 					set(bridgeengine_framework_pending FALSE)
@@ -36,7 +43,7 @@ if(@BRIDGEENGINE_BUILD_STATIC@)
 				set_target_properties(PkgConfig::${prefix} PROPERTIES
 					INTERFACE_INCLUDE_DIRECTORIES "${${prefix}_STATIC_INCLUDE_DIRS}"
 					INTERFACE_COMPILE_OPTIONS "${${prefix}_STATIC_CFLAGS_OTHER}"
-					INTERFACE_LINK_DIRECTORIES "${${prefix}_STATIC_LIBRARY_DIRS}"
+					INTERFACE_LINK_DIRECTORIES "${bridgeengine_static_link_directories}"
 					INTERFACE_LINK_LIBRARIES "${${prefix}_STATIC_LIBRARIES}"
 					INTERFACE_LINK_OPTIONS "${bridgeengine_static_link_options}"
 				)

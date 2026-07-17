@@ -56,7 +56,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libx11-dev libxcursor-dev libxext-dev libxi-dev libxinerama-dev libxrandr-dev libxss-dev libgl-dev libegl-dev libwayland-dev libxkbcommon-dev
+          sudo apt-get install -y pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libx11-dev libxcursor-dev libxext-dev libxi-dev libxinerama-dev libxrandr-dev libxss-dev libxtst-dev libgl-dev libegl-dev libwayland-dev libxkbcommon-dev
           git clone --depth 1 --branch release-3.4.12 https://github.com/libsdl-org/SDL.git /tmp/SDL3
           cmake -S /tmp/SDL3 -B /tmp/SDL3-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DSDL_SHARED=ON -DSDL_STATIC=ON
           cmake --build /tmp/SDL3-build --parallel 2

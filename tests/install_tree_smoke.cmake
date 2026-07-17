@@ -74,7 +74,7 @@ if(NOT package_test_result EQUAL 0)
   message(FATAL_ERROR "find_package consumer tests failed")
 endif()
 
-if(CONSUMER_DEPENDENCY_MODE STREQUAL "static-only" AND NOT WIN32)
+if((CONSUMER_DEPENDENCY_MODE STREQUAL "static-only" OR CONSUMER_DEPENDENCY_MODE STREQUAL "shared-static") AND NOT WIN32)
   set(pkgconfig_fixture_dir "${SOURCE_DIR}/tests/pkgconfig_static_fixture/pkgconfig")
   foreach(fixture_mode IN ITEMS default existing)
     set(fixture_command
