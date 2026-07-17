@@ -3,9 +3,9 @@
 #include "master_aggregate_bapi_compat_members.h"
 #include "master_aggregate_bapi_compat_signatures.h"
 #if defined(_MSC_VER) && !defined(__clang__)
-#define CHECK_SIGNATURE(symbol, type) _Static_assert(sizeof(&(symbol)) > 0, #symbol);
-#define CHECK_MEMBER(type, member, expected) _Static_assert(sizeof(((type *)0)->member) > 0, #type "." #member);
-#define CHECK_TYPE(type, expected) _Static_assert(sizeof(type) > 0, #type);
+#define CHECK_SIGNATURE(symbol, type) typedef char symbol##_exists[(sizeof(&(symbol)) > 0) ? 1 : -1];
+#define CHECK_MEMBER(type, member, expected) typedef char type##_##member##_exists[(sizeof(((type *)0)->member) > 0) ? 1 : -1];
+#define CHECK_TYPE(type, expected) typedef char type##_exists[(sizeof(type) > 0) ? 1 : -1];
 #else
 #define CHECK_SIGNATURE(symbol, type) _Static_assert(_Generic(&(symbol), type: 1, default: 0), #symbol);
 #define CHECK_MEMBER(type, member, expected) _Static_assert(_Generic(((type *)0)->member, expected: 1, default: 0), #type "." #member);
