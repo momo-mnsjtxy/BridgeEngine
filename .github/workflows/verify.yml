@@ -16,14 +16,14 @@ jobs:
             exit 1
           fi
       - name: Configure regression targets
-        run: >-
-          cmake -S . -B build-test
-          -DBRIDGEENGINE_BUILD_SHARED=OFF
-          -DBRIDGEENGINE_BUILD_STATIC=OFF
-           -DBRIDGEENGINE_BUILD_EXAMPLES=OFF
-           -DBRIDGEENGINE_BUILD_XJ380=OFF
-           -DBRIDGEENGINE_BUILD_TESTS=ON
-           -DBRIDGEENGINE_ENABLE_ASAN=ON
+        run: |
+          cmake -S . -B build-test \
+            -DBRIDGEENGINE_BUILD_SHARED=OFF \
+            -DBRIDGEENGINE_BUILD_STATIC=OFF \
+            -DBRIDGEENGINE_BUILD_EXAMPLES=OFF \
+            -DBRIDGEENGINE_BUILD_XJ380=OFF \
+            -DBRIDGEENGINE_BUILD_TESTS=ON \
+            -DBRIDGEENGINE_ENABLE_ASAN=ON
       - name: Run regression targets
         run: cmake --build build-test && ctest --test-dir build-test --output-on-failure
       - name: Build XJ380 with the fetched SDK
@@ -54,37 +54,55 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Linux media development packages
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libsdl3-dev libsdl3-image-dev libsdl3-ttf-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libx11-dev libxcursor-dev libxext-dev libxi-dev libxinerama-dev libxrandr-dev libgl-dev libegl-dev libwayland-dev libxkbcommon-dev
+          git clone --depth 1 --branch release-3.4.12 https://github.com/libsdl-org/SDL.git /tmp/SDL3
+          cmake -S /tmp/SDL3 -B /tmp/SDL3-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DSDL_SHARED=ON -DSDL_STATIC=ON
+          cmake --build /tmp/SDL3-build --parallel 2
+          sudo cmake --install /tmp/SDL3-build
+          git clone --depth 1 --branch release-3.4.4 https://github.com/libsdl-org/SDL_image.git /tmp/SDL3_image
+          cmake -S /tmp/SDL3_image -B /tmp/SDL3_image-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_PREFIX_PATH=/usr/local -DSDLIMAGE_VENDORED=ON
+          cmake --build /tmp/SDL3_image-build --parallel 2
+          sudo cmake --install /tmp/SDL3_image-build
+          git clone --depth 1 --branch release-3.2.2 https://github.com/libsdl-org/SDL_ttf.git /tmp/SDL3_ttf
+          cmake -S /tmp/SDL3_ttf -B /tmp/SDL3_ttf-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_PREFIX_PATH=/usr/local -DSDLTTF_VENDORED=ON
+          cmake --build /tmp/SDL3_ttf-build --parallel 2
+          sudo cmake --install /tmp/SDL3_ttf-build
       - name: Install macOS media development packages
         if: runner.os == 'macOS'
         run: brew install ffmpeg pkg-config sdl3 sdl3_image sdl3_ttf
       - name: Set up vcpkg
         if: runner.os == 'Windows'
         uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 908da3a305a0a8028d9602ab241b433652b3df69
       - name: Install Windows media development packages
         if: runner.os == 'Windows'
         run: vcpkg install ffmpeg sdl3 sdl3-image sdl3-ttf --triplet x64-windows
       - name: Configure Unix product build
         if: runner.os != 'Windows'
-        run: >-
-          cmake -S . -B build-product
-           -DBRIDGEENGINE_BUILD_SHARED=${{ matrix.package.shared }}
-           -DBRIDGEENGINE_BUILD_STATIC=${{ matrix.package.static }}
-          -DBRIDGEENGINE_BUILD_EXAMPLES=ON
-          -DBRIDGEENGINE_BUILD_TESTS=OFF
-          -DBRIDGEENGINE_BUILD_XJ380=OFF
+        run: |
+          cmake -S . -B build-product \
+            -DBRIDGEENGINE_BUILD_SHARED=${{ matrix.package.shared }} \
+            -DBRIDGEENGINE_BUILD_STATIC=${{ matrix.package.static }} \
+            -DBRIDGEENGINE_BUILD_EXAMPLES=ON \
+            -DBRIDGEENGINE_BUILD_TESTS=OFF \
+            -DBRIDGEENGINE_BUILD_XJ380=OFF \
+            -DBRIDGEENGINE_FETCH_SDL=OFF
       - name: Configure Windows product build
         if: runner.os == 'Windows'
         shell: pwsh
-        run: >-
-          cmake -S . -B build-product
-          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-          -DVCPKG_TARGET_TRIPLET=x64-windows
-           -DBRIDGEENGINE_BUILD_SHARED=${{ matrix.package.shared }}
-           -DBRIDGEENGINE_BUILD_STATIC=${{ matrix.package.static }}
-          -DBRIDGEENGINE_BUILD_EXAMPLES=ON
-          -DBRIDGEENGINE_BUILD_TESTS=OFF
-          -DBRIDGEENGINE_BUILD_XJ380=OFF
+        run: |
+          cmake -S . -B build-product `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DBRIDGEENGINE_BUILD_SHARED=${{ matrix.package.shared }} `
+            -DBRIDGEENGINE_BUILD_STATIC=${{ matrix.package.static }} `
+            -DBRIDGEENGINE_BUILD_EXAMPLES=ON `
+            -DBRIDGEENGINE_BUILD_TESTS=OFF `
+            -DBRIDGEENGINE_BUILD_XJ380=OFF `
+            -DBRIDGEENGINE_FETCH_SDL=OFF
       - name: Build product targets
         run: cmake --build build-product --config Release
       - name: Verify installed CMake package
