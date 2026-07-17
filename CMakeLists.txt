@@ -238,8 +238,10 @@ function(bridgeengine_configure_target target_name)
 	)
 	target_compile_definitions(${target_name} PRIVATE BAPI_LOG_ENABLED)
 	target_compile_options(${target_name} PRIVATE
-		$<$<COMPILE_LANGUAGE:C>:-Wall -Wextra>
-		$<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra>
+		$<$<AND:$<COMPILE_LANG_AND_ID:C,Clang,GNU>,$<COMPILE_LANGUAGE:C>>:-Wall -Wextra>
+		$<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang,GNU>,$<COMPILE_LANGUAGE:CXX>>:-Wall -Wextra>
+		$<$<COMPILE_LANG_AND_ID:C,MSVC>:/W4>
+		$<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/W4>
 	)
 	if(BRIDGEENGINE_PLATFORM_LINK_DIRS)
 		target_link_directories(${target_name} PRIVATE ${BRIDGEENGINE_PLATFORM_LINK_DIRS})

@@ -61,17 +61,73 @@ jobs:
           cmake -S /tmp/SDL3 -B /tmp/SDL3-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DSDL_SHARED=ON -DSDL_STATIC=ON
           cmake --build /tmp/SDL3-build --parallel 2
           sudo cmake --install /tmp/SDL3-build
-          git clone --depth 1 --branch release-3.4.4 https://github.com/libsdl-org/SDL_image.git /tmp/SDL3_image
+          git clone --depth 1 --recurse-submodules --shallow-submodules --branch release-3.4.4 https://github.com/libsdl-org/SDL_image.git /tmp/SDL3_image
           cmake -S /tmp/SDL3_image -B /tmp/SDL3_image-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_PREFIX_PATH=/usr/local -DSDLIMAGE_VENDORED=ON
           cmake --build /tmp/SDL3_image-build --parallel 2
           sudo cmake --install /tmp/SDL3_image-build
-          git clone --depth 1 --branch release-3.2.2 https://github.com/libsdl-org/SDL_ttf.git /tmp/SDL3_ttf
+          git clone --depth 1 --recurse-submodules --shallow-submodules --branch release-3.2.2 https://github.com/libsdl-org/SDL_ttf.git /tmp/SDL3_ttf
           cmake -S /tmp/SDL3_ttf -B /tmp/SDL3_ttf-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_PREFIX_PATH=/usr/local -DSDLTTF_VENDORED=ON
           cmake --build /tmp/SDL3_ttf-build --parallel 2
           sudo cmake --install /tmp/SDL3_ttf-build
-      - name: Install macOS media development packages
+      - name: Install macOS SDL development packages
         if: runner.os == 'macOS'
-        run: brew install ffmpeg pkg-config sdl3 sdl3_image sdl3_ttf
+        run: brew install pkg-config sdl3 sdl3_image sdl3_ttf
+      - name: Install macOS shared FFmpeg
+        if: runner.os == 'macOS' && matrix.package.static == 'OFF'
+        run: brew install ffmpeg
+      - name: Build controlled macOS static FFmpeg
+        if: runner.os == 'macOS' && matrix.package.static == 'ON'
+        run: |
+          brew install nasm
+          FFMPEG_VERSION=7.1.1
+          FFMPEG_SHA256=733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1
+          FFMPEG_PREFIX="$RUNNER_TEMP/ffmpeg-$FFMPEG_VERSION"
+          FFMPEG_ARCHIVE="$RUNNER_TEMP/ffmpeg-$FFMPEG_VERSION.tar.xz"
+          FFMPEG_SOURCE="$RUNNER_TEMP/ffmpeg-$FFMPEG_VERSION"
+          curl --fail --location --retry 3 --output "$FFMPEG_ARCHIVE" "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
+          echo "$FFMPEG_SHA256  $FFMPEG_ARCHIVE" | shasum -a 256 -c -
+          tar -xf "$FFMPEG_ARCHIVE" -C "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/ffmpeg-build"
+          cd "$RUNNER_TEMP/ffmpeg-build"
+          "$FFMPEG_SOURCE/configure" \
+            --prefix="$FFMPEG_PREFIX" \
+            --disable-shared \
+            --enable-static \
+            --enable-pic \
+            --disable-debug \
+            --disable-programs \
+            --disable-doc \
+            --disable-avdevice \
+            --disable-avfilter \
+            --disable-postproc \
+            --disable-network \
+            --disable-autodetect \
+            --disable-iconv \
+            --disable-bzlib \
+            --disable-lzma \
+            --disable-zlib \
+            --disable-securetransport \
+            --disable-audiotoolbox \
+            --disable-videotoolbox \
+            --disable-everything \
+            --enable-decoder=h264 \
+            --enable-decoder=aac \
+            --enable-demuxer=mov \
+            --enable-parser=h264 \
+            --enable-parser=aac \
+            --enable-protocol=file
+          make -j"$(sysctl -n hw.logicalcpu)"
+          make install
+          SDL_PKG_CONFIG_DIRS="$(brew --prefix sdl3)/lib/pkgconfig:$(brew --prefix sdl3_image)/lib/pkgconfig:$(brew --prefix sdl3_ttf)/lib/pkgconfig"
+          SDL_CMAKE_PREFIXES="$(brew --prefix sdl3):$(brew --prefix sdl3_image):$(brew --prefix sdl3_ttf)"
+          echo "PKG_CONFIG_PATH=$FFMPEG_PREFIX/lib/pkgconfig:$SDL_PKG_CONFIG_DIRS" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=$SDL_CMAKE_PREFIXES" >> "$GITHUB_ENV"
+          PKG_CONFIG_PATH="$FFMPEG_PREFIX/lib/pkgconfig" pkg-config --libs --static libavcodec libavformat libavutil libswscale libswresample
+          test -f "$FFMPEG_PREFIX/lib/libavcodec.a"
+          test -f "$FFMPEG_PREFIX/lib/libavformat.a"
+          test -f "$FFMPEG_PREFIX/lib/libavutil.a"
+          test -f "$FFMPEG_PREFIX/lib/libswscale.a"
+          test -f "$FFMPEG_PREFIX/lib/libswresample.a"
       - name: Set up vcpkg
         if: runner.os == 'Windows'
         uses: lukka/run-vcpkg@v11
