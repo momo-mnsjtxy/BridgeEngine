@@ -474,6 +474,9 @@ endif()
 if(BRIDGEENGINE_BUILD_SHARED)
 	add_library(bridgeengine_shared SHARED ${BRIDGEENGINE_SOURCES})
 	set_target_properties(bridgeengine_shared PROPERTIES OUTPUT_NAME bridgeengine)
+	if(WIN32)
+		set_target_properties(bridgeengine_shared PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+	endif()
 	bridgeengine_configure_target(bridgeengine_shared)
 	add_library(BridgeEngine::shared ALIAS bridgeengine_shared)
 endif()
@@ -675,12 +678,24 @@ if(TARGET bridgeengine_static)
 	list(APPEND BRIDGEENGINE_INSTALL_TARGETS bridgeengine_static)
 endif()
 if(BRIDGEENGINE_INSTALL_TARGETS)
-	install(TARGETS ${BRIDGEENGINE_INSTALL_TARGETS}
+	if(TARGET bridgeengine_shared)
+		install(TARGETS bridgeengine_shared
+			EXPORT BridgeEngineTargets
+			ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+			LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+			RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+		)
+	endif()
+	if(TARGET bridgeengine_static)
+		set(BRIDGEENGINE_STATIC_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR})
+		if(WIN32 AND TARGET bridgeengine_shared)
+			set(BRIDGEENGINE_STATIC_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/static)
+		endif()
+		install(TARGETS bridgeengine_static
 		EXPORT BridgeEngineTargets
-		ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-		LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-		RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-	)
+			ARCHIVE DESTINATION ${BRIDGEENGINE_STATIC_INSTALL_DIR}
+		)
+	endif()
 	configure_package_config_file(
 		"${CMAKE_CURRENT_SOURCE_DIR}/cmake/BridgeEngineConfig.cmake.in"
 		"${CMAKE_CURRENT_BINARY_DIR}/BridgeEngineConfig.cmake"
