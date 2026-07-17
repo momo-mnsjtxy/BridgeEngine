@@ -69,23 +69,30 @@ jobs:
           cmake -S /tmp/SDL3_ttf -B /tmp/SDL3_ttf-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_PREFIX_PATH=/usr/local -DSDLTTF_VENDORED=ON
           cmake --build /tmp/SDL3_ttf-build --parallel 2
           sudo cmake --install /tmp/SDL3_ttf-build
+          sudo ldconfig
       - name: Install macOS SDL development packages
         if: runner.os == 'macOS'
         run: brew install pkg-config sdl3 sdl3_image sdl3_ttf
       - name: Install macOS shared FFmpeg
         if: runner.os == 'macOS' && matrix.package.static == 'OFF'
         run: brew install ffmpeg
-      - name: Build controlled macOS static FFmpeg
-        if: runner.os == 'macOS' && matrix.package.static == 'ON'
+      - name: Build controlled Unix static FFmpeg
+        if: runner.os != 'Windows' && matrix.package.static == 'ON'
         run: |
-          brew install nasm
+          if [ "$RUNNER_OS" = macOS ]; then
+            brew install nasm
+          fi
           FFMPEG_VERSION=7.1.1
           FFMPEG_SHA256=733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1
           FFMPEG_PREFIX="$RUNNER_TEMP/ffmpeg-$FFMPEG_VERSION"
           FFMPEG_ARCHIVE="$RUNNER_TEMP/ffmpeg-$FFMPEG_VERSION.tar.xz"
           FFMPEG_SOURCE="$RUNNER_TEMP/ffmpeg-$FFMPEG_VERSION"
           curl --fail --location --retry 3 --output "$FFMPEG_ARCHIVE" "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
-          echo "$FFMPEG_SHA256  $FFMPEG_ARCHIVE" | shasum -a 256 -c -
+          if command -v sha256sum >/dev/null; then
+            echo "$FFMPEG_SHA256  $FFMPEG_ARCHIVE" | sha256sum -c -
+          else
+            echo "$FFMPEG_SHA256  $FFMPEG_ARCHIVE" | shasum -a 256 -c -
+          fi
           tar -xf "$FFMPEG_ARCHIVE" -C "$RUNNER_TEMP"
           mkdir "$RUNNER_TEMP/ffmpeg-build"
           cd "$RUNNER_TEMP/ffmpeg-build"
@@ -109,12 +116,24 @@ jobs:
             --disable-securetransport \
             --disable-audiotoolbox \
             --disable-videotoolbox
-          make -j"$(sysctl -n hw.logicalcpu)"
+          make -j"$(getconf _NPROCESSORS_ONLN)"
           make install
-          SDL_PKG_CONFIG_DIRS="$(brew --prefix sdl3)/lib/pkgconfig:$(brew --prefix sdl3_image)/lib/pkgconfig:$(brew --prefix sdl3_ttf)/lib/pkgconfig"
-          SDL_CMAKE_PREFIXES="$(brew --prefix sdl3):$(brew --prefix sdl3_image):$(brew --prefix sdl3_ttf)"
-          echo "PKG_CONFIG_PATH=$FFMPEG_PREFIX/lib/pkgconfig:$SDL_PKG_CONFIG_DIRS" >> "$GITHUB_ENV"
-          echo "CMAKE_PREFIX_PATH=$SDL_CMAKE_PREFIXES" >> "$GITHUB_ENV"
+          if [ "$RUNNER_OS" = macOS ]; then
+            SDL_PKG_CONFIG_DIRS=""
+            for formula in $(brew deps --include-build --union --recursive sdl3 sdl3_image sdl3_ttf) sdl3 sdl3_image sdl3_ttf; do
+              if formula_prefix="$(brew --prefix "$formula" 2>/dev/null)"; then
+                pkgconfig_dir="$formula_prefix/lib/pkgconfig"
+                if [ -d "$pkgconfig_dir" ]; then
+                  SDL_PKG_CONFIG_DIRS="${SDL_PKG_CONFIG_DIRS:+$SDL_PKG_CONFIG_DIRS:}$pkgconfig_dir"
+                fi
+              fi
+            done
+            SDL_CMAKE_PREFIXES="$(brew --prefix sdl3):$(brew --prefix sdl3_image):$(brew --prefix sdl3_ttf)"
+            echo "PKG_CONFIG_PATH=$FFMPEG_PREFIX/lib/pkgconfig:$SDL_PKG_CONFIG_DIRS" >> "$GITHUB_ENV"
+            echo "CMAKE_PREFIX_PATH=$SDL_CMAKE_PREFIXES" >> "$GITHUB_ENV"
+          else
+            echo "PKG_CONFIG_PATH=$FFMPEG_PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+          fi
           PKG_CONFIG_PATH="$FFMPEG_PREFIX/lib/pkgconfig" pkg-config --libs --static libavcodec libavformat libavutil libswscale libswresample
           test -f "$FFMPEG_PREFIX/lib/libavcodec.a"
           test -f "$FFMPEG_PREFIX/lib/libavformat.a"

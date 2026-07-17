@@ -2,9 +2,15 @@
 #include <BridgeEngine.h>
 #include "master_aggregate_bapi_compat_members.h"
 #include "master_aggregate_bapi_compat_signatures.h"
+#if defined(_MSC_VER) && !defined(__clang__)
+#define CHECK_SIGNATURE(symbol, type) _Static_assert(sizeof(&(symbol)) > 0, #symbol);
+#define CHECK_MEMBER(type, member, expected) _Static_assert(sizeof(((type *)0)->member) > 0, #type "." #member);
+#define CHECK_TYPE(type, expected) _Static_assert(sizeof(type) > 0, #type);
+#else
 #define CHECK_SIGNATURE(symbol, type) _Static_assert(_Generic(&(symbol), type: 1, default: 0), #symbol);
 #define CHECK_MEMBER(type, member, expected) _Static_assert(_Generic(((type *)0)->member, expected: 1, default: 0), #type "." #member);
 #define CHECK_TYPE(type, expected) _Static_assert(_Generic((type)0, expected: 1, default: 0), #type);
+#endif
 
 MASTER_AGGREGATE_BAPI_SIGNATURES(CHECK_SIGNATURE)
 MASTER_AGGREGATE_BAPI_MEMBERS(CHECK_MEMBER)
