@@ -1,0 +1,7 @@
+prefix=/tmp
+libdir=${prefix}
+
+Name: libswresample
+Description: BridgeEngine static pkg-config fixture
+Version: 1.0
+Libs: -L${libdir} -lfixture_swresample

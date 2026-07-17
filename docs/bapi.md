@@ -2,11 +2,14 @@
 
 ## 契约来源
 
-`include/BridgeEngine.h` 是唯一的公开 API、类型和 ABI 契约来源。本文不重复维护会漂移的声明副本；调用方应
+`include/BridgeEngine.h` 是唯一的公开 API 和类型契约来源。本文不重复维护会漂移的声明副本；调用方应
 直接包含 `<BridgeEngine.h>`，并以该头文件中的函数签名和枚举值为准。
 
-当前聚合头对 master 文档化 BAPI 保持重新编译兼容。旧拆分头路径（例如 `audio/audio.h`）、事件的平台内部字段和
-旧二进制 ABI 不属于兼容承诺；旧项目应只包含 `<BridgeEngine.h>` 并重新链接当前库。
+`<BridgeEngine.h>`（master 聚合头）是 v2 源码兼容性的基线。v2 公开 API 仅可追加；既有 API、类型、枚举值和
+签名不得在同一 major 版本中删除或更改。API 必须先标记为弃用，且只能在后续 major 版本中移除。
+
+兼容承诺不包括旧拆分头路径、内部头或内部字段、以及已编译二进制的 ABI；旧项目应只包含 `<BridgeEngine.h>` 并重新
+链接当前库。
 
 ## 生命周期
 

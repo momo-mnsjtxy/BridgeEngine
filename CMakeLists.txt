@@ -102,7 +102,11 @@ if(BRIDGEENGINE_BUILD_SHARED OR BRIDGEENGINE_BUILD_STATIC OR BRIDGEENGINE_BUILD_
 	if(TARGET SDL3::SDL3)
 		set(BRIDGEENGINE_SDL3_TARGET SDL3::SDL3)
 	elseif(TARGET PkgConfig::SDL3)
-		set(BRIDGEENGINE_SDL3_TARGET PkgConfig::SDL3)
+		add_library(SDL3::SDL3 INTERFACE IMPORTED)
+		set_target_properties(SDL3::SDL3 PROPERTIES
+			INTERFACE_LINK_LIBRARIES PkgConfig::SDL3
+		)
+		set(BRIDGEENGINE_SDL3_TARGET SDL3::SDL3)
 	else()
 		if(NOT BRIDGEENGINE_FETCH_SDL)
 			message(FATAL_ERROR "SDL3 was not found. Install it or configure with -DBRIDGEENGINE_FETCH_SDL=ON.")
@@ -122,7 +126,11 @@ if(BRIDGEENGINE_BUILD_SHARED OR BRIDGEENGINE_BUILD_STATIC OR BRIDGEENGINE_BUILD_
 	if(TARGET SDL3_image::SDL3_image)
 		set(BRIDGEENGINE_SDL3_IMAGE_TARGET SDL3_image::SDL3_image)
 	elseif(TARGET PkgConfig::SDL3_IMAGE)
-		set(BRIDGEENGINE_SDL3_IMAGE_TARGET PkgConfig::SDL3_IMAGE)
+		add_library(SDL3_image::SDL3_image INTERFACE IMPORTED)
+		set_target_properties(SDL3_image::SDL3_image PROPERTIES
+			INTERFACE_LINK_LIBRARIES PkgConfig::SDL3_IMAGE
+		)
+		set(BRIDGEENGINE_SDL3_IMAGE_TARGET SDL3_image::SDL3_image)
 	else()
 		if(NOT BRIDGEENGINE_FETCH_SDL)
 			message(FATAL_ERROR "SDL3_image was not found. Install it or configure with -DBRIDGEENGINE_FETCH_SDL=ON.")
@@ -140,7 +148,11 @@ if(BRIDGEENGINE_BUILD_SHARED OR BRIDGEENGINE_BUILD_STATIC OR BRIDGEENGINE_BUILD_
 	if(TARGET SDL3_ttf::SDL3_ttf)
 		set(BRIDGEENGINE_SDL3_TTF_TARGET SDL3_ttf::SDL3_ttf)
 	elseif(TARGET PkgConfig::SDL3_TTF)
-		set(BRIDGEENGINE_SDL3_TTF_TARGET PkgConfig::SDL3_TTF)
+		add_library(SDL3_ttf::SDL3_ttf INTERFACE IMPORTED)
+		set_target_properties(SDL3_ttf::SDL3_ttf PROPERTIES
+			INTERFACE_LINK_LIBRARIES PkgConfig::SDL3_TTF
+		)
+		set(BRIDGEENGINE_SDL3_TTF_TARGET SDL3_ttf::SDL3_ttf)
 	else()
 		if(NOT BRIDGEENGINE_FETCH_SDL)
 			message(FATAL_ERROR "SDL3_ttf was not found. Install it or configure with -DBRIDGEENGINE_FETCH_SDL=ON.")
@@ -154,10 +166,22 @@ if(BRIDGEENGINE_BUILD_SHARED OR BRIDGEENGINE_BUILD_STATIC OR BRIDGEENGINE_BUILD_
 		FetchContent_MakeAvailable(sdl3_ttf)
 		set(BRIDGEENGINE_SDL3_TTF_TARGET SDL3_ttf::SDL3_ttf)
 	endif()
+	add_library(BridgeEngine::SDL3 INTERFACE IMPORTED)
+	set_target_properties(BridgeEngine::SDL3 PROPERTIES
+		INTERFACE_LINK_LIBRARIES "${BRIDGEENGINE_SDL3_TARGET}"
+	)
+	add_library(BridgeEngine::SDL3_image INTERFACE IMPORTED)
+	set_target_properties(BridgeEngine::SDL3_image PROPERTIES
+		INTERFACE_LINK_LIBRARIES "${BRIDGEENGINE_SDL3_IMAGE_TARGET}"
+	)
+	add_library(BridgeEngine::SDL3_ttf INTERFACE IMPORTED)
+	set_target_properties(BridgeEngine::SDL3_ttf PROPERTIES
+		INTERFACE_LINK_LIBRARIES "${BRIDGEENGINE_SDL3_TTF_TARGET}"
+	)
 	set(BRIDGEENGINE_SDL_LIBS
-		${BRIDGEENGINE_SDL3_TARGET}
-		${BRIDGEENGINE_SDL3_IMAGE_TARGET}
-		${BRIDGEENGINE_SDL3_TTF_TARGET}
+		BridgeEngine::SDL3
+		BridgeEngine::SDL3_image
+		BridgeEngine::SDL3_ttf
 	)
 
 	if(WIN32)
@@ -372,12 +396,28 @@ if(BRIDGEENGINE_BUILD_TESTS)
 		add_test(NAME bridgeengine.master_aggregate_bapi_compat
 			COMMAND bridgeengine_master_aggregate_bapi_compat_test
 		)
-		if(BRIDGEENGINE_BUILD_SHARED)
+		add_executable(bridgeengine_master_aggregate_bapi_compat_cpp_test
+			tests/master_aggregate_bapi_compat_test.cpp
+		)
+		target_link_libraries(bridgeengine_master_aggregate_bapi_compat_cpp_test PRIVATE
+			${BRIDGEENGINE_COMPAT_LINK_TARGET}
+		)
+		add_test(NAME bridgeengine.master_aggregate_bapi_compat_cpp
+			COMMAND bridgeengine_master_aggregate_bapi_compat_cpp_test
+		)
+		if(BRIDGEENGINE_BUILD_SHARED OR BRIDGEENGINE_BUILD_STATIC)
+			if(BRIDGEENGINE_BUILD_SHARED AND BRIDGEENGINE_BUILD_STATIC)
+				set(BRIDGEENGINE_CONSUMER_DEPENDENCY_MODE shared-static)
+			elseif(BRIDGEENGINE_BUILD_SHARED)
+				set(BRIDGEENGINE_CONSUMER_DEPENDENCY_MODE shared-only)
+			else()
+				set(BRIDGEENGINE_CONSUMER_DEPENDENCY_MODE static-only)
+			endif()
 			add_test(NAME bridgeengine.install_tree_smoke
 				COMMAND ${CMAKE_COMMAND}
 					-DBUILD_DIR=${CMAKE_BINARY_DIR}
 					-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
-					-DC_COMPILER=${CMAKE_C_COMPILER}
+					-DCONSUMER_DEPENDENCY_MODE=${BRIDGEENGINE_CONSUMER_DEPENDENCY_MODE}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/tests/install_tree_smoke.cmake
 			)
 		endif()

@@ -2,11 +2,87 @@
 
 include(CMakeFindDependencyMacro)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
-find_dependency(SDL3 CONFIG)
-find_dependency(SDL3_image CONFIG)
-find_dependency(SDL3_ttf CONFIG)
-find_dependency(PkgConfig)
-pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavcodec libavformat libavutil libswscale libswresample)
-find_dependency(FFmpeg)
+
+if(@BRIDGEENGINE_BUILD_STATIC@)
+	find_package(SDL3 CONFIG QUIET)
+	find_package(SDL3_image CONFIG QUIET)
+	find_package(SDL3_ttf CONFIG QUIET)
+	if(NOT WIN32)
+		find_dependency(PkgConfig)
+		macro(bridgeengine_pkg_check_static prefix)
+			pkg_check_modules(${prefix} REQUIRED ${ARGN})
+			# A target supplied by the consumer is an explicit dependency override.
+			if(NOT TARGET PkgConfig::${prefix})
+				add_library(PkgConfig::${prefix} INTERFACE IMPORTED)
+				set_target_properties(PkgConfig::${prefix} PROPERTIES
+					INTERFACE_INCLUDE_DIRECTORIES "${${prefix}_STATIC_INCLUDE_DIRS}"
+					INTERFACE_COMPILE_OPTIONS "${${prefix}_STATIC_CFLAGS_OTHER}"
+					INTERFACE_LINK_DIRECTORIES "${${prefix}_STATIC_LIBRARY_DIRS}"
+					INTERFACE_LINK_LIBRARIES "${${prefix}_STATIC_LIBRARIES}"
+					INTERFACE_LINK_OPTIONS "${${prefix}_STATIC_LDFLAGS_OTHER}"
+				)
+			endif()
+		endmacro()
+	endif()
+
+	set(BRIDGEENGINE_SDL3_DEPENDENCY SDL3::SDL3)
+	set(BRIDGEENGINE_SDL3_IMAGE_DEPENDENCY SDL3_image::SDL3_image)
+	set(BRIDGEENGINE_SDL3_TTF_DEPENDENCY SDL3_ttf::SDL3_ttf)
+	if(NOT TARGET SDL3::SDL3 OR NOT TARGET SDL3_image::SDL3_image OR NOT TARGET SDL3_ttf::SDL3_ttf)
+		if(WIN32)
+			find_dependency(PkgConfig)
+		endif()
+		if(NOT TARGET SDL3::SDL3)
+			if(WIN32)
+				pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
+			else()
+				bridgeengine_pkg_check_static(SDL3 sdl3)
+			endif()
+			set(BRIDGEENGINE_SDL3_DEPENDENCY PkgConfig::SDL3)
+		endif()
+		if(NOT TARGET SDL3_image::SDL3_image)
+			if(WIN32)
+				pkg_check_modules(SDL3_IMAGE REQUIRED IMPORTED_TARGET sdl3-image)
+			else()
+				bridgeengine_pkg_check_static(SDL3_IMAGE sdl3-image)
+			endif()
+			set(BRIDGEENGINE_SDL3_IMAGE_DEPENDENCY PkgConfig::SDL3_IMAGE)
+		endif()
+		if(NOT TARGET SDL3_ttf::SDL3_ttf)
+			if(WIN32)
+				pkg_check_modules(SDL3_TTF REQUIRED IMPORTED_TARGET sdl3-ttf)
+			else()
+				bridgeengine_pkg_check_static(SDL3_TTF sdl3-ttf)
+			endif()
+			set(BRIDGEENGINE_SDL3_TTF_DEPENDENCY PkgConfig::SDL3_TTF)
+		endif()
+	endif()
+
+	if(NOT TARGET BridgeEngine::SDL3)
+		add_library(BridgeEngine::SDL3 INTERFACE IMPORTED)
+		set_target_properties(BridgeEngine::SDL3 PROPERTIES
+			INTERFACE_LINK_LIBRARIES "${BRIDGEENGINE_SDL3_DEPENDENCY}"
+		)
+	endif()
+	if(NOT TARGET BridgeEngine::SDL3_image)
+		add_library(BridgeEngine::SDL3_image INTERFACE IMPORTED)
+		set_target_properties(BridgeEngine::SDL3_image PROPERTIES
+			INTERFACE_LINK_LIBRARIES "${BRIDGEENGINE_SDL3_IMAGE_DEPENDENCY}"
+		)
+	endif()
+	if(NOT TARGET BridgeEngine::SDL3_ttf)
+		add_library(BridgeEngine::SDL3_ttf INTERFACE IMPORTED)
+		set_target_properties(BridgeEngine::SDL3_ttf PROPERTIES
+			INTERFACE_LINK_LIBRARIES "${BRIDGEENGINE_SDL3_TTF_DEPENDENCY}"
+		)
+	endif()
+
+	if(WIN32)
+		find_dependency(FFmpeg)
+	else()
+		bridgeengine_pkg_check_static(FFMPEG
+			libavcodec libavformat libavutil libswscale libswresample)
+	endif()
+endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/BridgeEngineTargets.cmake")

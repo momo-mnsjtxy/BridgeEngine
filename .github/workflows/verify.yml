@@ -34,32 +34,42 @@ jobs:
           test -d build-xj380-fetch/_deps/xj380_sdk-src/obj-gui
 
   product:
-    name: product (${{ matrix.os }})
+    name: product (${{ matrix.os }}, ${{ matrix.package.name }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        package:
+          - name: shared-only
+            shared: 'ON'
+            static: 'OFF'
+          - name: static-only
+            shared: 'OFF'
+            static: 'ON'
+          - name: shared-static
+            shared: 'ON'
+            static: 'ON'
     steps:
       - uses: actions/checkout@v4
-      - name: Install Linux FFmpeg development packages
+      - name: Install Linux media development packages
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev
-      - name: Install macOS FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libsdl3-dev libsdl3-image-dev libsdl3-ttf-dev
+      - name: Install macOS media development packages
         if: runner.os == 'macOS'
-        run: brew install ffmpeg pkg-config
+        run: brew install ffmpeg pkg-config sdl3 sdl3_image sdl3_ttf
       - name: Set up vcpkg
         if: runner.os == 'Windows'
         uses: lukka/run-vcpkg@v11
-      - name: Install Windows FFmpeg
+      - name: Install Windows media development packages
         if: runner.os == 'Windows'
-        run: vcpkg install ffmpeg:x64-windows
+        run: vcpkg install ffmpeg sdl3 sdl3-image sdl3-ttf --triplet x64-windows
       - name: Configure Unix product build
         if: runner.os != 'Windows'
         run: >-
           cmake -S . -B build-product
-          -DBRIDGEENGINE_BUILD_SHARED=ON
-          -DBRIDGEENGINE_BUILD_STATIC=ON
+           -DBRIDGEENGINE_BUILD_SHARED=${{ matrix.package.shared }}
+           -DBRIDGEENGINE_BUILD_STATIC=${{ matrix.package.static }}
           -DBRIDGEENGINE_BUILD_EXAMPLES=ON
           -DBRIDGEENGINE_BUILD_TESTS=OFF
           -DBRIDGEENGINE_BUILD_XJ380=OFF
@@ -70,10 +80,30 @@ jobs:
           cmake -S . -B build-product
           -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
           -DVCPKG_TARGET_TRIPLET=x64-windows
-          -DBRIDGEENGINE_BUILD_SHARED=ON
-          -DBRIDGEENGINE_BUILD_STATIC=ON
+           -DBRIDGEENGINE_BUILD_SHARED=${{ matrix.package.shared }}
+           -DBRIDGEENGINE_BUILD_STATIC=${{ matrix.package.static }}
           -DBRIDGEENGINE_BUILD_EXAMPLES=ON
           -DBRIDGEENGINE_BUILD_TESTS=OFF
           -DBRIDGEENGINE_BUILD_XJ380=OFF
       - name: Build product targets
         run: cmake --build build-product --config Release
+      - name: Verify installed CMake package
+        if: runner.os != 'Windows'
+        run: >-
+          cmake
+          -DBUILD_DIR=build-product
+          -DSOURCE_DIR=.
+          -DCONSUMER_DEPENDENCY_MODE=${{ matrix.package.name }}
+          -P tests/install_tree_smoke.cmake
+      - name: Verify installed CMake package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          cmake
+          -DBUILD_DIR=build-product
+          -DSOURCE_DIR=.
+          -DCONSUMER_DEPENDENCY_MODE=${{ matrix.package.name }}
+          -DINSTALL_CONFIG=Release
+          -DTOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_BIN_DIR="$env:VCPKG_ROOT/installed/x64-windows/bin"
+          -P tests/install_tree_smoke.cmake

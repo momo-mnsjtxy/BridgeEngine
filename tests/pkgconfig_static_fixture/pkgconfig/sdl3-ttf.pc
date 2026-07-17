@@ -1,0 +1,10 @@
+prefix=/tmp
+libdir=${prefix}
+includedir=${prefix}
+
+Name: sdl3-ttf
+Description: BridgeEngine static pkg-config fixture
+Version: 1.0
+Libs: -L${libdir} -lfixture_sdl3_ttf
+Libs.private: -lfixture_sdl3_ttf_private
+Cflags: -I${includedir}
