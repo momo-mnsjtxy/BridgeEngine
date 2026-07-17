@@ -11,6 +11,11 @@
 #define CHECK_MEMBER(type, member, expected) _Static_assert(_Generic(((type *)0)->member, expected: 1, default: 0), #type "." #member);
 #define CHECK_TYPE(type, expected) _Static_assert(_Generic((type)0, expected: 1, default: 0), #type);
 #endif
+#if defined(_MSC_VER) && !defined(__clang__)
+#define CHECK_VALUE(name, expression) typedef char name[(expression) ? 1 : -1];
+#else
+#define CHECK_VALUE(name, expression) _Static_assert(expression, #name);
+#endif
 
 MASTER_AGGREGATE_BAPI_SIGNATURES(CHECK_SIGNATURE)
 MASTER_AGGREGATE_BAPI_MEMBERS(CHECK_MEMBER)
@@ -129,15 +134,14 @@ CHECK_SIGNATURE(bapi_level_manager_load_from_xml, bapi_level_manager_t (*)(const
 CHECK_SIGNATURE(bapi_scene_manager_save_to_xml, int (*)(bapi_scene_manager_t, const char *));
 CHECK_SIGNATURE(bapi_level_manager_save_to_xml, int (*)(bapi_level_manager_t, const char *));
 
-_Static_assert(BAPI_EVENT_QUIT == 0 && BAPI_EVENT_KEY_DOWN == 1 && BAPI_EVENT_MOUSE_BUTTON_DOWN == 2 &&
-			   BAPI_EVENT_MOUSE_BUTTON_UP == 3 && BAPI_EVENT_MOUSE_MOTION == 4, "BAPI event values");
-_Static_assert(KEY_ESC == 128 && KEY_BACKSPACE == 129 && KEY_TAB == 130 && KEY_ENTER == 131 &&
-			   KEY_CAPS == 132 && KEY_SHIFT == 133 && KEY_CTRL == 134 && KEY_ALT == 135 && KEY_SPACE == 136 &&
-			   KEY_F1 == 137 && KEY_F12 == 148 && KEY_NUML == 149 && KEY_SCROLL == 150, "special key values");
-_Static_assert(BAPI_BUTTON_LEFT == 1, "BAPI_BUTTON_LEFT");
-_Static_assert(BAPI_LOG_LEVEL_DEBUG == 0 && BAPI_LOG_LEVEL_INFO == 1 && BAPI_LOG_LEVEL_WARN == 2 &&
-			   BAPI_LOG_LEVEL_ERROR == 3 && BAPI_LOG_LEVEL_CRITICAL == 4 && BAPI_LOG_LEVEL_NONE == 5,
-			   "BAPI log values");
+CHECK_VALUE(bapi_event_values, BAPI_EVENT_QUIT == 0 && BAPI_EVENT_KEY_DOWN == 1 && BAPI_EVENT_MOUSE_BUTTON_DOWN == 2 &&
+			BAPI_EVENT_MOUSE_BUTTON_UP == 3 && BAPI_EVENT_MOUSE_MOTION == 4)
+CHECK_VALUE(bapi_special_key_values, KEY_ESC == 128 && KEY_BACKSPACE == 129 && KEY_TAB == 130 && KEY_ENTER == 131 &&
+			KEY_CAPS == 132 && KEY_SHIFT == 133 && KEY_CTRL == 134 && KEY_ALT == 135 && KEY_SPACE == 136 &&
+			KEY_F1 == 137 && KEY_F12 == 148 && KEY_NUML == 149 && KEY_SCROLL == 150)
+CHECK_VALUE(bapi_button_left_value, BAPI_BUTTON_LEFT == 1)
+CHECK_VALUE(bapi_log_level_values, BAPI_LOG_LEVEL_DEBUG == 0 && BAPI_LOG_LEVEL_INFO == 1 && BAPI_LOG_LEVEL_WARN == 2 &&
+			BAPI_LOG_LEVEL_ERROR == 3 && BAPI_LOG_LEVEL_CRITICAL == 4 && BAPI_LOG_LEVEL_NONE == 5)
 
 int main(void)
 {

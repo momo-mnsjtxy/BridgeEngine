@@ -77,13 +77,25 @@ endif()
 if((CONSUMER_DEPENDENCY_MODE STREQUAL "static-only" OR CONSUMER_DEPENDENCY_MODE STREQUAL "shared-static") AND NOT WIN32)
   set(pkgconfig_fixture_dir "${SOURCE_DIR}/tests/pkgconfig_static_fixture/pkgconfig")
   foreach(fixture_mode IN ITEMS default existing)
+	execute_process(
+	  COMMAND "${CMAKE_COMMAND}" -E env
+	    --unset=PKG_CONFIG_PATH
+	    "PKG_CONFIG_LIBDIR=${pkgconfig_fixture_dir}"
+	    pkg-config --modversion sdl3-image
+	  RESULT_VARIABLE fixture_pkgconfig_result
+	  OUTPUT_VARIABLE fixture_pkgconfig_version
+	  OUTPUT_STRIP_TRAILING_WHITESPACE)
+	if(NOT fixture_pkgconfig_result EQUAL 0 OR NOT fixture_pkgconfig_version STREQUAL "1.0")
+	  message(FATAL_ERROR "pkg-config static fixture does not resolve sdl3-image 1.0")
+	endif()
     set(fixture_command
       "${CMAKE_COMMAND}" -E env
+	  --unset=PKG_CONFIG_PATH
       "PKG_CONFIG_LIBDIR=${pkgconfig_fixture_dir}"
-      "PKG_CONFIG_PATH="
       "${CMAKE_COMMAND}" -S "${SOURCE_DIR}/tests/pkgconfig_static_fixture"
       -B "${prefix}/pkgconfig-static-${fixture_mode}"
       "-DCMAKE_PREFIX_PATH=${prefix}"
+	  -DPKG_CONFIG_USE_CMAKE_PREFIX_PATH=FALSE
       -DCMAKE_DISABLE_FIND_PACKAGE_SDL3=TRUE
       -DCMAKE_DISABLE_FIND_PACKAGE_SDL3_image=TRUE
       -DCMAKE_DISABLE_FIND_PACKAGE_SDL3_ttf=TRUE)
