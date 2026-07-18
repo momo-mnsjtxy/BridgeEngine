@@ -101,6 +101,7 @@ jobs:
             --disable-shared \
             --enable-static \
             --enable-pic \
+            --extra-cflags=-fPIC \
             --disable-x86asm \
             --disable-debug \
             --disable-programs \
