@@ -102,7 +102,7 @@ jobs:
             --enable-static \
             --enable-pic \
             --extra-cflags=-fPIC \
-            --disable-x86asm \
+            --disable-asm \
             --disable-debug \
             --disable-programs \
             --disable-doc \
