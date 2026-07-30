@@ -689,7 +689,7 @@ static void sdl3_delay(uint32_t ms)
 
 static uint32_t sdl3_get_ticks(void)
 {
-	return SDL_GetTicks();
+	return (uint32_t)SDL_GetTicks();
 }
 
 static void sdl3_log_debug(const char *fmt, ...)
