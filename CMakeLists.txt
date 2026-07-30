@@ -247,6 +247,9 @@ function(bridgeengine_configure_target target_name)
 			${BRIDGEENGINE_PLATFORM_INCLUDES}
 	)
 	target_compile_definitions(${target_name} PRIVATE BAPI_LOG_ENABLED)
+	target_compile_definitions(${target_name} PRIVATE
+		$<$<COMPILE_LANG_AND_ID:C,MSVC>:_CRT_SECURE_NO_WARNINGS>
+	)
 	target_compile_options(${target_name} PRIVATE
 		$<$<AND:$<COMPILE_LANG_AND_ID:C,Clang,GNU>,$<COMPILE_LANGUAGE:C>>:-Wall -Wextra>
 		$<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang,GNU>,$<COMPILE_LANGUAGE:CXX>>:-Wall -Wextra>

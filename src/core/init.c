@@ -209,10 +209,10 @@ void bapi_delay(uint32_t ms)
 bapi_color_t bapi_color_from_hex(uint32_t hex_color)
 {
 	bapi_color_t color;
-	color.r = (hex_color >> 24) & 0xFF;
-	color.g = (hex_color >> 16) & 0xFF;
-	color.b = (hex_color >> 8) & 0xFF;
-	color.a = hex_color & 0xFF;
+	color.r = (uint8_t)((hex_color >> 24) & 0xFF);
+	color.g = (uint8_t)((hex_color >> 16) & 0xFF);
+	color.b = (uint8_t)((hex_color >> 8) & 0xFF);
+	color.a = (uint8_t)(hex_color & 0xFF);
 	return color;
 }
 

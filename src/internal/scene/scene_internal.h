@@ -41,9 +41,8 @@ struct bapi_level_manager_internal {
 
 static inline uint32_t bapi_hash_string(const char* str) {
     uint32_t hash = 5381;
-    int c;
-    while ((c = *str++)) {
-        hash = ((hash << 5) + hash) + c;
+    for (const char *p = str; *p != '\0'; ++p) {
+        hash = ((hash << 5) + hash) + (unsigned char)*p;
     }
     return hash;
 }

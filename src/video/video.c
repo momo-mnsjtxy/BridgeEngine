@@ -642,7 +642,7 @@ void bapi_video_free(bapi_video_t video)
 
 static int decode_video_frame(bapi_video_t video)
 {
-	while (1) {
+	for (;;) {
 		int ret = avcodec_receive_frame(video->codec_ctx, video->frame);
 		if (ret == 0) {
 			int present_result = present_video_frame(video, video->frame);

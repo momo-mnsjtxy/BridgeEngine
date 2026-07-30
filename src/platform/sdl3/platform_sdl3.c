@@ -269,9 +269,8 @@ static void sdl3_set_render_draw_color(plat_renderer_t renderer, uint8_t r, uint
 static void sdl3_set_render_draw_blend_mode(plat_renderer_t renderer, plat_blend_mode_t mode)
 {
 	if (!renderer) return;
-	SDL_BlendMode sdl_mode = SDL_BLENDMODE_BLEND;
-	if (mode == PLAT_BLENDMODE_BLEND) sdl_mode = SDL_BLENDMODE_BLEND;
-	SDL_SetRenderDrawBlendMode(renderer->renderer, sdl_mode);
+	(void)mode;
+	SDL_SetRenderDrawBlendMode(renderer->renderer, SDL_BLENDMODE_BLEND);
 }
 
 static void sdl3_render_clear(plat_renderer_t renderer)
