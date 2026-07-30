@@ -7,6 +7,16 @@ if(POLICY CMP0169)
 	cmake_policy(SET CMP0169 OLD)
 endif()
 
+# Auto-detect vcpkg from VCPKG_ROOT environment variable
+if(NOT CMAKE_TOOLCHAIN_FILE AND DEFINED ENV{VCPKG_ROOT})
+	set(_vcpkg_toolchain "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
+	if(EXISTS "${_vcpkg_toolchain}")
+		set(CMAKE_TOOLCHAIN_FILE "${_vcpkg_toolchain}" CACHE FILEPATH "vcpkg toolchain file")
+		message(STATUS "Auto-detected vcpkg from VCPKG_ROOT: $ENV{VCPKG_ROOT}")
+	endif()
+	unset(_vcpkg_toolchain)
+endif()
+
 project(BridgeEngine VERSION 2.0.0 LANGUAGES C CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
