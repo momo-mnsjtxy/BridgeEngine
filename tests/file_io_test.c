@@ -16,7 +16,7 @@ static plat_io_t *open_read(const char *path)
 	plat_io_t *io = (plat_io_t *)malloc(sizeof(plat_io_t));
 	if (!io) return NULL;
 	io->data = (const uint8_t *)"Hello, BridgeEngine File IO API!";
-	io->len	 = 31;
+	io->len	 = strlen((const char *)io->data);
 	io->pos	 = 0;
 	return io;
 }
@@ -94,7 +94,7 @@ int main(void)
 
 	if (f) {
 		int64_t sz = bapi_file_size(f);
-		result = result && expect(sz == 31, "bapi_file_size returns correct size");
+		result = result && expect(sz == 32, "bapi_file_size returns correct size");
 
 		char buf[64] = {0};
 		size_t n	 = bapi_file_read(f, buf, 5);
@@ -112,7 +112,7 @@ int main(void)
 		result = result && expect(n > 0, "bapi_file_read after seek");
 
 		seek_ret = bapi_file_seek(f, -3, 2);
-		result = result && expect(seek_ret == 28, "bapi_file_seek from end");
+		result = result && expect(seek_ret == 29, "bapi_file_seek from end");
 
 		memset(buf, 0, sizeof(buf));
 		n = bapi_file_read(f, buf, sizeof(buf) - 1);
