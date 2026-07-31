@@ -22,6 +22,8 @@ BridgeEngine 是一个跨平台 2D 图形引擎，提供简洁的 C API。桌面
 | **摄像机** | 2D 摄像机，支持平移、缩放、世界坐标转换 |
 | **数学工具** | 向量运算、插值、钳制等工具函数 |
 
+完整API文档请查看[BAPI文档](docs/bapi.md)
+
 ---
 
 ## 依赖
@@ -206,7 +208,9 @@ v2 的公开接口仅为 `BridgeEngine.h`。旧项目若仍包含 `audio/audio.h
 这不包含 `bapi_internal.h`、`scene/scene_internal.h`、`bapi_event_t` 的旧平台内部字段、`bapi_texture_internal` 的旧内部字段，或已编译二进制的 ABI 兼容性。
 
 ---
+## 相关项目
+[BridgeEngine CLI](https://github.com/GHhuang1057/becli)用于更优雅的食用BridgeEngine :D
 
 ## License
 
-[MIT](LICENSE)
+[XINGJI Open Sources License 2.0](LICENSE)
