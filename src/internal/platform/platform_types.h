@@ -17,6 +17,7 @@ typedef struct plat_audio_device* plat_audio_device_t;
 typedef struct plat_audio_stream* plat_audio_stream_t;
 typedef struct plat_mutex* plat_mutex_t;
 typedef struct plat_surface plat_surface_t;
+typedef struct plat_io plat_io_t;
 
 
 

@@ -91,6 +91,15 @@ typedef struct {
 } plat_sync_api_t;
 
 typedef struct {
+	plat_io_t *(*open_read)(const char *path);
+	void	   (*close)(plat_io_t *io);
+	size_t	   (*read)(plat_io_t *io, void *buf, size_t size);
+	int64_t	   (*seek)(plat_io_t *io, int64_t offset, int whence);
+	int64_t	   (*tell)(plat_io_t *io);
+	int64_t	   (*size)(plat_io_t *io);
+} plat_io_api_t;
+
+typedef struct {
 	plat_core_api_t		core;
 	plat_window_api_t	window;
 	plat_renderer_api_t renderer;
@@ -98,6 +107,7 @@ typedef struct {
 	plat_text_api_t		text;
 	plat_audio_api_t	audio;
 	plat_sync_api_t		sync;
+	plat_io_api_t		io;
 	uint32_t			capabilities;
 } plat_interface_t;
 

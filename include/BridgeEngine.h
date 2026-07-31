@@ -20,6 +20,7 @@ typedef struct bapi_scene_internal		   *bapi_scene_t;
 typedef struct bapi_scene_manager_internal *bapi_scene_manager_t;
 typedef struct bapi_level_internal		   *bapi_level_t;
 typedef struct bapi_level_manager_internal *bapi_level_manager_t;
+typedef struct bapi_file_internal		   *bapi_file_t;
 
 typedef struct {
 	uint8_t r;
@@ -370,6 +371,13 @@ int bapi_level_manager_save_to_xml(bapi_level_manager_t manager, const char *fil
 
 const char *bridgeengine_get_version(void);
 int			bridgeengine_get_version_number(void);
+
+bapi_file_t bapi_file_open(const char *path);
+size_t		bapi_file_read(bapi_file_t file, void *buffer, size_t size);
+int64_t		bapi_file_seek(bapi_file_t file, int64_t offset, int origin);
+int64_t		bapi_file_tell(bapi_file_t file);
+int64_t		bapi_file_size(bapi_file_t file);
+void		bapi_file_close(bapi_file_t file);
 
 #ifdef __cplusplus
 }

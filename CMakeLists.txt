@@ -68,6 +68,7 @@ set(BRIDGEENGINE_CORE_SOURCES
 	src/core/render_context.c
 	src/core/init.c
 	src/core/version.c
+	src/io.c
 	src/log.c
 )
 set(BRIDGEENGINE_RENDER_SOURCES
@@ -482,6 +483,18 @@ if(BRIDGEENGINE_BUILD_TESTS)
 		target_link_options(bridgeengine_log_test PRIVATE -fsanitize=address)
 	endif()
 	add_test(NAME bridgeengine.log COMMAND bridgeengine_log_test "${CMAKE_CURRENT_BINARY_DIR}/bridgeengine.log")
+
+	add_executable(bridgeengine_file_io_test
+		tests/file_io_test.c
+		src/io.c
+		src/platform/platform.c
+	)
+	target_include_directories(bridgeengine_file_io_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.file_io COMMAND bridgeengine_file_io_test)
 endif()
 
 if(BRIDGEENGINE_BUILD_SHARED)
@@ -554,6 +567,7 @@ if(BRIDGEENGINE_BUILD_XJ380)
 		src/core/render_context.c
 		src/core/init.c
 		src/core/version.c
+		src/io.c
 		src/log.c
 		src/draw.c
 		src/input/mouse_drawing.c
@@ -574,7 +588,7 @@ if(BRIDGEENGINE_BUILD_XJ380)
 
 	set(XJ380_COMMON_FLAGS
 		-ffreestanding -fno-builtin -m64 -fno-stack-protector -fshort-wchar
-		-nostdinc -O -g -fPIC
+		-nostdinc -O -g
 		-I${CMAKE_CURRENT_SOURCE_DIR}/include
 		-I${CMAKE_CURRENT_BINARY_DIR}/generated
 		-I${CMAKE_CURRENT_SOURCE_DIR}/src

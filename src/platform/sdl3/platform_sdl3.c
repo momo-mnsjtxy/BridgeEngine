@@ -4,6 +4,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3_image/SDL_image.h>
 #include <SDL3_ttf/SDL_ttf.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -34,6 +35,10 @@ struct plat_audio_stream {
 
 struct plat_mutex {
 	SDL_Mutex *mutex;
+};
+
+struct plat_io {
+	SDL_IOStream *stream;
 };
 
 struct plat_surface {
@@ -376,9 +381,15 @@ static void sdl3_destroy_texture(plat_texture_t texture)
 
 static plat_surface_t *sdl3_load_image(const char *filepath)
 {
+	if (!filepath) return NULL;
+	SDL_IOStream *io = SDL_IOFromFile(filepath, "rb");
+	if (!io) return NULL;
 	plat_surface_t *s = malloc(sizeof(plat_surface_t));
-	if (!s) return NULL;
-	s->surface = IMG_Load(filepath);
+	if (!s) {
+		SDL_CloseIO(io);
+		return NULL;
+	}
+	s->surface = IMG_Load_IO(io, true);
 	if (!s->surface) {
 		free(s);
 		return NULL;
@@ -454,9 +465,15 @@ static void sdl3_quit_ttf(void)
 
 static plat_font_t sdl3_open_font(const char *filepath, float size)
 {
+	if (!filepath) return NULL;
+	SDL_IOStream *io = SDL_IOFromFile(filepath, "rb");
+	if (!io) return NULL;
 	plat_font_t f = malloc(sizeof(struct plat_font));
-	if (!f) return NULL;
-	f->font = TTF_OpenFont(filepath, size);
+	if (!f) {
+		SDL_CloseIO(io);
+		return NULL;
+	}
+	f->font = TTF_OpenFontIO(io, true, size);
 	f->size = size;
 	if (!f->font) {
 		free(f);
@@ -610,12 +627,14 @@ static void sdl3_resume_audio_stream_device(plat_audio_stream_t stream)
 static int sdl3_load_wav(const char *filepath, plat_audio_spec_t *spec, uint8_t **buffer,
 						 uint32_t *length)
 {
-	if (!spec) return -1;
+	if (!spec || !filepath) return -1;
+	SDL_IOStream *io = SDL_IOFromFile(filepath, "rb");
+	if (!io) return -1;
 	SDL_AudioSpec sdl_spec;
 	SDL_zero(sdl_spec);
 	uint8_t *wav_buffer;
 	uint32_t wav_length;
-	if (!SDL_LoadWAV(filepath, &sdl_spec, &wav_buffer, &wav_length)) {
+	if (!SDL_LoadWAV_IO(io, true, &sdl_spec, &wav_buffer, &wav_length)) {
 		return -1;
 	}
 
@@ -680,6 +699,54 @@ static void sdl3_lock_mutex(plat_mutex_t mutex)
 static void sdl3_unlock_mutex(plat_mutex_t mutex)
 {
 	if (mutex) SDL_UnlockMutex(mutex->mutex);
+}
+
+static plat_io_t *sdl3_io_open_read(const char *path)
+{
+	if (!path) return NULL;
+	plat_io_t *io = (plat_io_t *)malloc(sizeof(plat_io_t));
+	if (!io) return NULL;
+	io->stream = SDL_IOFromFile(path, "rb");
+	if (!io->stream) {
+		free(io);
+		return NULL;
+	}
+	return io;
+}
+
+static void sdl3_io_close(plat_io_t *io)
+{
+	if (io) {
+		SDL_CloseIO(io->stream);
+		free(io);
+	}
+}
+
+static size_t sdl3_io_read(plat_io_t *io, void *buf, size_t size)
+{
+	if (!io || !buf) return 0;
+	return (size_t)SDL_ReadIO(io->stream, buf, size);
+}
+
+static int64_t sdl3_io_seek(plat_io_t *io, int64_t offset, int whence)
+{
+	if (!io) return -1;
+	SDL_IOWhence sdl_whence = SDL_IO_SEEK_SET;
+	if (whence == SEEK_CUR) sdl_whence = SDL_IO_SEEK_CUR;
+	else if (whence == SEEK_END) sdl_whence = SDL_IO_SEEK_END;
+	return SDL_SeekIO(io->stream, offset, sdl_whence);
+}
+
+static int64_t sdl3_io_tell(plat_io_t *io)
+{
+	if (!io) return -1;
+	return SDL_TellIO(io->stream);
+}
+
+static int64_t sdl3_io_size(plat_io_t *io)
+{
+	if (!io) return -1;
+	return SDL_GetIOSize(io->stream);
 }
 
 static void sdl3_delay(uint32_t ms)
@@ -809,6 +876,15 @@ static const plat_interface_t sdl3_interface = {
 			.destroy_mutex = sdl3_destroy_mutex,
 			.lock_mutex	   = sdl3_lock_mutex,
 			.unlock_mutex  = sdl3_unlock_mutex,
+		},
+	.io =
+		{
+			.open_read = sdl3_io_open_read,
+			.close	   = sdl3_io_close,
+			.read	   = sdl3_io_read,
+			.seek	   = sdl3_io_seek,
+			.tell	   = sdl3_io_tell,
+			.size	   = sdl3_io_size,
 		},
 };
 

@@ -6,6 +6,7 @@
 #include <krlibc.h>
 #include <xapi.h>
 #include <xposix/stdarg.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -97,6 +98,10 @@ struct plat_audio_stream {
 
 struct plat_mutex {
 	volatile int flag;
+};
+
+struct plat_io {
+	FILE *fp;
 };
 
 enum xj380_surf_type { SURF_PIXELS, SURF_IMAGE, SURF_TEXT };
@@ -837,6 +842,55 @@ static void xj380_mem_free(void *ptr)
 	}
 }
 
+static plat_io_t *xj380_io_open_read(const char *path)
+{
+	if (!path) return NULL;
+	plat_io_t *io = (plat_io_t *)malloc(sizeof(plat_io_t));
+	if (!io) return NULL;
+	io->fp = fopen(path, "rb");
+	if (!io->fp) {
+		free(io);
+		return NULL;
+	}
+	return io;
+}
+
+static void xj380_io_close(plat_io_t *io)
+{
+	if (io) {
+		if (io->fp) fclose(io->fp);
+		free(io);
+	}
+}
+
+static size_t xj380_io_read(plat_io_t *io, void *buf, size_t size)
+{
+	if (!io || !io->fp || !buf) return 0;
+	return fread(buf, 1, size, io->fp);
+}
+
+static int64_t xj380_io_seek(plat_io_t *io, int64_t offset, int whence)
+{
+	if (!io || !io->fp) return -1;
+	return fseek(io->fp, (long)offset, whence);
+}
+
+static int64_t xj380_io_tell(plat_io_t *io)
+{
+	if (!io || !io->fp) return -1;
+	return ftell(io->fp);
+}
+
+static int64_t xj380_io_size(plat_io_t *io)
+{
+	if (!io || !io->fp) return -1;
+	long pos = ftell(io->fp);
+	fseek(io->fp, 0, SEEK_END);
+	long size = ftell(io->fp);
+	fseek(io->fp, pos, SEEK_SET);
+	return size;
+}
+
 static plat_mutex_t xj380_create_mutex(void)
 {
 	plat_mutex_t m = (plat_mutex_t)malloc(sizeof(struct plat_mutex));
@@ -999,6 +1053,15 @@ static const plat_interface_t xj380_interface = {
 			.destroy_mutex = xj380_destroy_mutex,
 			.lock_mutex	   = xj380_lock_mutex,
 			.unlock_mutex  = xj380_unlock_mutex,
+		},
+	.io =
+		{
+			.open_read = xj380_io_open_read,
+			.close	   = xj380_io_close,
+			.read	   = xj380_io_read,
+			.seek	   = xj380_io_seek,
+			.tell	   = xj380_io_tell,
+			.size	   = xj380_io_size,
 		},
 	.capabilities = 0,
 };
