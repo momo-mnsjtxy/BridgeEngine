@@ -15,7 +15,7 @@
 
 # Mono auto generated files
 mono_crash.*
-
+XJ380_SDK/*
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
@@ -27,12 +27,31 @@ x86/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
-!XJ380_XACT_2026v4_xj380/
-!XJ380_XACT_2026v4_xj380/**/*
 [Oo]bj/
 [Oo]ut/
 *.log
 [Ll]ogs/
+
+# BridgeEngine build and runtime outputs
+build-*/
+*.o
+*.a
+*.so
+*.dll
+*.exe
+*.epf
+bridgeengine_desktop_example
+bridgeengine_text_example
+libbridgeengine.so
+libbridgeengine.dll
+libbridgeengine.a
+libbridgeengine_xj380.a
+bridgeengine_demo.epf
+
+# XJ380 SDK is a local developer-provided dependency, not repository content.
+XJ380_XACT_2026v4_xj380/
+XJ380_XACT_2026v4_linux/
+.bridgeengine-deps/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
@@ -206,12 +225,9 @@ PublishScripts/
 # NuGet v3's project.json files produces more ignorable files
 *.nuget.props
 *.nuget.targets
-*.epf
 # Microsoft Azure Build Output
 csx/
 *.build.csdef
-!XJ380_XACT_2026v4_xj380/
-!XJ380_XACT_2026v4_xj380/**/*
 
 # Microsoft Azure Emulator
 ecf/
@@ -374,14 +390,6 @@ compile_commands.json
 .vscode
 .idea
 
-*.o
-!XJ380_XACT_2026v4_xj380/**/*.o
-main
-main.exe
-text_example
-examples/libbridgeengine.so
-*.a
-!XJ380_XACT_2026v4_xj380/**/*.a
 .trae/*
 *.so
 *.dll
@@ -396,12 +404,12 @@ CMakeUserPresets.json
 !cmake/FindFFmpeg.cmake
 
 # Compiled artifacts (platform-specific)
-main.exe
-main
-text_example.exe
-text_example
-log_test.exe
-log_test
+bridgeengine_desktop_example.exe
+bridgeengine_desktop_example
+bridgeengine_text_example.exe
+bridgeengine_text_example
+bridgeengine_log_example.exe
+bridgeengine_log_example
 bridgeengine_demo
 bridgeengine_demo.exe
 libbridgeengine.*

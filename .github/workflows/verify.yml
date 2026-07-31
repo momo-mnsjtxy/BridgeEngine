@@ -1,0 +1,216 @@
+name: verify
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject generated binaries
+        run: |
+          if git ls-files | grep -E '\.(dll|exe|o|a|so|epf)$'; then
+            echo "Generated binaries must not be tracked."
+            exit 1
+          fi
+      - name: Configure regression targets
+        run: |
+          cmake -S . -B build-test \
+            -DBRIDGEENGINE_BUILD_SHARED=OFF \
+            -DBRIDGEENGINE_BUILD_STATIC=OFF \
+            -DBRIDGEENGINE_BUILD_EXAMPLES=OFF \
+            -DBRIDGEENGINE_BUILD_XJ380=OFF \
+            -DBRIDGEENGINE_BUILD_TESTS=ON \
+            -DBRIDGEENGINE_ENABLE_ASAN=ON
+      - name: Run regression targets
+        run: cmake --build build-test && ctest --test-dir build-test --output-on-failure
+      - name: Build XJ380 with the fetched SDK
+        run: |
+          cmake -S . -B build-xj380-fetch -DBRIDGEENGINE_BUILD_SHARED=OFF -DBRIDGEENGINE_BUILD_STATIC=OFF -DBRIDGEENGINE_BUILD_EXAMPLES=OFF -DBRIDGEENGINE_BUILD_TESTS=OFF -DBRIDGEENGINE_BUILD_XJ380=ON -DXJ380_SDK=
+          cmake --build build-xj380-fetch --target xj380_staticlib
+          test -d build-xj380-fetch/_deps/xj380_sdk-src/include
+          test -d build-xj380-fetch/_deps/xj380_sdk-src/obj-gui
+      - name: Install Linux media development packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config nasm libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev libx11-dev libxcursor-dev libxext-dev libxi-dev libxinerama-dev libxrandr-dev libxss-dev libxtst-dev libgl-dev libegl-dev libwayland-dev libxkbcommon-dev
+      - name: Restore SDL cache
+        id: sdl-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/sdl3
+          key: ${{ runner.os }}-sdl3-3.4.12-3.4.4-3.2.2-${{ hashFiles('.github/workflows/verify.yml') }}
+      - name: Build SDL dependencies
+        if: steps.sdl-cache.outputs.cache-hit != 'true'
+        run: |
+          SDL_PREFIX="$RUNNER_TEMP/sdl3"
+          git clone --depth 1 --branch release-3.4.12 https://github.com/libsdl-org/SDL.git /tmp/SDL3
+          cmake -S /tmp/SDL3 -B /tmp/SDL3-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$SDL_PREFIX" -DSDL_SHARED=ON -DSDL_STATIC=ON
+          cmake --build /tmp/SDL3-build --parallel 2
+          cmake --install /tmp/SDL3-build
+          git clone --depth 1 --recurse-submodules --shallow-submodules --branch release-3.4.4 https://github.com/libsdl-org/SDL_image.git /tmp/SDL3_image
+          cmake -S /tmp/SDL3_image -B /tmp/SDL3_image-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$SDL_PREFIX" -DCMAKE_PREFIX_PATH="$SDL_PREFIX" -DSDLIMAGE_VENDORED=ON
+          cmake --build /tmp/SDL3_image-build --parallel 2
+          cmake --install /tmp/SDL3_image-build
+          git clone --depth 1 --recurse-submodules --shallow-submodules --branch release-3.2.2 https://github.com/libsdl-org/SDL_ttf.git /tmp/SDL3_ttf
+          cmake -S /tmp/SDL3_ttf -B /tmp/SDL3_ttf-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$SDL_PREFIX" -DCMAKE_PREFIX_PATH="$SDL_PREFIX" -DSDLTTF_VENDORED=ON
+          cmake --build /tmp/SDL3_ttf-build --parallel 2
+          cmake --install /tmp/SDL3_ttf-build
+      - name: Configure SDL search paths
+        run: |
+          echo "CMAKE_PREFIX_PATH=$RUNNER_TEMP/sdl3" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$RUNNER_TEMP/sdl3/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$RUNNER_TEMP/sdl3/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+      - name: Restore static FFmpeg cache
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ffmpeg-7.1.1
+          key: ${{ runner.os }}-ffmpeg-7.1.1-${{ hashFiles('.github/workflows/verify.yml') }}
+      - name: Build controlled static FFmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: |
+          FFMPEG_VERSION=7.1.1
+          FFMPEG_SHA256=733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1
+          FFMPEG_PREFIX="$RUNNER_TEMP/ffmpeg-$FFMPEG_VERSION"
+          FFMPEG_ARCHIVE="$RUNNER_TEMP/ffmpeg-$FFMPEG_VERSION.tar.xz"
+          FFMPEG_SOURCE="$RUNNER_TEMP/ffmpeg-$FFMPEG_VERSION"
+          curl --fail --location --retry 3 --output "$FFMPEG_ARCHIVE" "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
+          echo "$FFMPEG_SHA256  $FFMPEG_ARCHIVE" | sha256sum -c -
+          tar -xf "$FFMPEG_ARCHIVE" -C "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/ffmpeg-build"
+          cd "$RUNNER_TEMP/ffmpeg-build"
+          "$FFMPEG_SOURCE/configure" --prefix="$FFMPEG_PREFIX" --disable-shared --enable-static --enable-pic --extra-cflags=-fPIC --disable-asm --disable-debug --disable-programs --disable-doc --disable-avdevice --disable-avfilter --disable-postproc --disable-network --disable-autodetect --disable-iconv --disable-bzlib --disable-lzma --disable-zlib --disable-securetransport --disable-audiotoolbox --disable-videotoolbox
+          make -j"$(getconf _NPROCESSORS_ONLN)"
+          make install
+      - name: Build and verify package modes
+        run: |
+          base_pkg_config_path="$PKG_CONFIG_PATH"
+          for mode in shared-only static-only shared-static; do
+            case "$mode" in
+              shared-only) shared=ON; static=OFF ;;
+              static-only) shared=OFF; static=ON ;;
+              shared-static) shared=ON; static=ON ;;
+            esac
+            build_dir="build-product-$mode"
+            if [ "$mode" = shared-only ]; then
+              export PKG_CONFIG_PATH="$base_pkg_config_path"
+            else
+              export PKG_CONFIG_PATH="$RUNNER_TEMP/ffmpeg-7.1.1/lib/pkgconfig:$base_pkg_config_path"
+            fi
+            cmake -S . -B "$build_dir" -DBRIDGEENGINE_BUILD_SHARED="$shared" -DBRIDGEENGINE_BUILD_STATIC="$static" -DBRIDGEENGINE_BUILD_EXAMPLES=ON -DBRIDGEENGINE_BUILD_TESTS=OFF -DBRIDGEENGINE_BUILD_XJ380=OFF -DBRIDGEENGINE_FETCH_SDL=OFF
+            cmake --build "$build_dir"
+            cmake -DBUILD_DIR="$build_dir" -DSOURCE_DIR=. -DCONSUMER_DEPENDENCY_MODE="$mode" -P tests/install_tree_smoke.cmake
+          done
+
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install macOS development packages
+        run: brew install pkg-config nasm sdl3 sdl3_image sdl3_ttf ffmpeg
+      - name: Restore static FFmpeg cache
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/ffmpeg-7.1.1
+          key: ${{ runner.os }}-ffmpeg-7.1.1-${{ hashFiles('.github/workflows/verify.yml') }}
+      - name: Build controlled static FFmpeg
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: |
+          FFMPEG_VERSION=7.1.1
+          FFMPEG_SHA256=733984395e0dbbe5c046abda2dc49a5544e7e0e1e2366bba849222ae9e3a03b1
+          FFMPEG_PREFIX="$RUNNER_TEMP/ffmpeg-$FFMPEG_VERSION"
+          FFMPEG_ARCHIVE="$RUNNER_TEMP/ffmpeg-$FFMPEG_VERSION.tar.xz"
+          FFMPEG_SOURCE="$RUNNER_TEMP/ffmpeg-$FFMPEG_VERSION"
+          curl --fail --location --retry 3 --output "$FFMPEG_ARCHIVE" "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
+          echo "$FFMPEG_SHA256  $FFMPEG_ARCHIVE" | shasum -a 256 -c -
+          tar -xf "$FFMPEG_ARCHIVE" -C "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/ffmpeg-build"
+          cd "$RUNNER_TEMP/ffmpeg-build"
+          "$FFMPEG_SOURCE/configure" --prefix="$FFMPEG_PREFIX" --disable-shared --enable-static --enable-pic --extra-cflags=-fPIC --disable-asm --disable-debug --disable-programs --disable-doc --disable-avdevice --disable-avfilter --disable-postproc --disable-network --disable-autodetect --disable-iconv --disable-bzlib --disable-lzma --disable-zlib --disable-securetransport --disable-audiotoolbox --disable-videotoolbox
+          make -j"$(getconf _NPROCESSORS_ONLN)"
+          make install
+      - name: Configure dependency search paths
+        run: |
+          SDL_PKG_CONFIG_DIRS=""
+          for formula in $(brew deps --include-build --union --recursive sdl3 sdl3_image sdl3_ttf) sdl3 sdl3_image sdl3_ttf; do
+            if formula_prefix="$(brew --prefix "$formula" 2>/dev/null)" && [ -d "$formula_prefix/lib/pkgconfig" ]; then
+              SDL_PKG_CONFIG_DIRS="${SDL_PKG_CONFIG_DIRS:+$SDL_PKG_CONFIG_DIRS:}$formula_prefix/lib/pkgconfig"
+            fi
+          done
+          echo "PKG_CONFIG_PATH=$SDL_PKG_CONFIG_DIRS" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=$(brew --prefix sdl3):$(brew --prefix sdl3_image):$(brew --prefix sdl3_ttf)" >> "$GITHUB_ENV"
+      - name: Build and verify package modes
+        run: |
+          base_pkg_config_path="$PKG_CONFIG_PATH"
+          for mode in shared-only static-only shared-static; do
+            case "$mode" in
+              shared-only) shared=ON; static=OFF ;;
+              static-only) shared=OFF; static=ON ;;
+              shared-static) shared=ON; static=ON ;;
+            esac
+            build_dir="build-product-$mode"
+            if [ "$mode" = shared-only ]; then
+              export PKG_CONFIG_PATH="$base_pkg_config_path"
+            else
+              export PKG_CONFIG_PATH="$RUNNER_TEMP/ffmpeg-7.1.1/lib/pkgconfig:$base_pkg_config_path"
+            fi
+            cmake -S . -B "$build_dir" -DBRIDGEENGINE_BUILD_SHARED="$shared" -DBRIDGEENGINE_BUILD_STATIC="$static" -DBRIDGEENGINE_BUILD_EXAMPLES=ON -DBRIDGEENGINE_BUILD_TESTS=OFF -DBRIDGEENGINE_BUILD_XJ380=OFF -DBRIDGEENGINE_FETCH_SDL=OFF
+            cmake --build "$build_dir"
+            cmake -DBUILD_DIR="$build_dir" -DSOURCE_DIR=. -DCONSUMER_DEPENDENCY_MODE="$mode" -P tests/install_tree_smoke.cmake
+          done
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-bincache
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\vcpkg-bincache,readwrite
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 908da3a305a0a8028d9602ab241b433652b3df69
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}\vcpkg-bincache
+          key: ${{ runner.os }}-vcpkg-x64-windows-${{ hashFiles('.github/workflows/verify.yml') }}
+      - name: Install Windows media development packages
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          & "$env:VCPKG_ROOT\vcpkg.exe" version
+          & "$env:VCPKG_ROOT\vcpkg.exe" install ffmpeg sdl3 sdl3-image sdl3-ttf --triplet x64-windows
+      - name: Build and verify package modes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          foreach ($mode in 'shared-only', 'static-only', 'shared-static') {
+            switch ($mode) {
+              'shared-only' { $shared = 'ON'; $static = 'OFF' }
+              'static-only' { $shared = 'OFF'; $static = 'ON' }
+              'shared-static' { $shared = 'ON'; $static = 'ON' }
+            }
+            $buildDir = "build-product-$mode"
+            cmake -S . -B $buildDir `
+              -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+              -DVCPKG_TARGET_TRIPLET=x64-windows `
+              "-DBRIDGEENGINE_BUILD_SHARED=$shared" `
+              "-DBRIDGEENGINE_BUILD_STATIC=$static" `
+              -DBRIDGEENGINE_BUILD_EXAMPLES=ON `
+              -DBRIDGEENGINE_BUILD_TESTS=OFF `
+              -DBRIDGEENGINE_BUILD_XJ380=OFF `
+              -DBRIDGEENGINE_FETCH_SDL=OFF
+            cmake --build $buildDir --config Release
+            cmake "-DBUILD_DIR=$buildDir" -DSOURCE_DIR=. "-DCONSUMER_DEPENDENCY_MODE=$mode" -DINSTALL_CONFIG=Release -DTOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_BIN_DIR="$env:VCPKG_ROOT/installed/x64-windows/bin" -P tests/install_tree_smoke.cmake
+          }
