@@ -70,9 +70,12 @@ Windows 请在 PowerShell 执行：
 ```
 
 脚本会检查 Visual Studio Build Tools 的 C++ 工作负载，并在指定依赖目录（默认
-`.bridgeengine-deps/vcpkg`）中引导 vcpkg，无需管理员权限。它默认构建 `ffmpeg:x64-windows`；
-可用 `-Triplet` 或 `VCPKG_TARGET_TRIPLET` 环境变量覆盖目标 triplet。完成后使用脚本输出的 `CMAKE_TOOLCHAIN_FILE` 和
-`VCPKG_TARGET_TRIPLET` 参数配置 CMake。
+`.bridgeengine-deps/vcpkg`）中引导 vcpkg，无需管理员权限。它默认构建 `ffmpeg:x64-windows`、
+`sdl3`、`sdl3-image[png]` 和 `sdl3-ttf`；可用 `-Triplet` 或 `VCPKG_TARGET_TRIPLET` 环境变量覆盖目标 triplet。
+完成后使用脚本输出的 `CMAKE_TOOLCHAIN_FILE` 和 `VCPKG_TARGET_TRIPLET` 参数配置 CMake。
+
+vcpkg 的 `sdl3-image` 默认不编译图像编解码器，需要按需启用 feature（如 `sdl3-image[png]`）才能用
+`bapi_texture_load()` 加载 PNG/JPEG；未启用时仅 BMP 可用。
 
 ---
 

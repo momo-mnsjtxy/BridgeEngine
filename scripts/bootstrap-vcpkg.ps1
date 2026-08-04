@@ -44,8 +44,8 @@ if (-not (Test-Path $vcpkg)) {
     & (Join-Path $VcpkgRoot "bootstrap-vcpkg.bat") -disableMetrics
 }
 
-& $vcpkg install "ffmpeg:$Triplet"
+& $vcpkg install "ffmpeg:$Triplet" "sdl3:$Triplet" "sdl3-image[png]:$Triplet" "sdl3-ttf:$Triplet"
 
 $toolchain = Join-Path $VcpkgRoot "scripts\\buildsystems\\vcpkg.cmake"
-Write-Host "FFmpeg is ready. Configure BridgeEngine with:"
+Write-Host "Dependencies are ready. Configure BridgeEngine with:"
 Write-Host "cmake --preset default -DCMAKE_TOOLCHAIN_FILE=`"$toolchain`" -DVCPKG_TARGET_TRIPLET=$Triplet"
