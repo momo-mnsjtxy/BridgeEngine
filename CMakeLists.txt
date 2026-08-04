@@ -17,7 +17,11 @@ if(NOT CMAKE_TOOLCHAIN_FILE AND DEFINED ENV{VCPKG_ROOT})
 	unset(_vcpkg_toolchain)
 endif()
 
-project(BridgeEngine VERSION 2.0.0 LANGUAGES C CXX)
+project(BridgeEngine VERSION 26.0.1 LANGUAGES C CXX)
+
+# User-visible version string (may include non-numeric suffixes like "26v1").
+# Keep numeric PROJECT_VERSION for major/minor/patch macros and compatibility.
+set(BRIDGEENGINE_VERSION_STRING "26v1" CACHE STRING "User-visible BridgeEngine version string")
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(FetchContent)

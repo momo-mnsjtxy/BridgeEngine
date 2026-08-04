@@ -1,6 +1,10 @@
 #pragma once
 
-#define BRIDGEENGINE_VERSION "@PROJECT_VERSION@"
+/* BRIDGEENGINE_VERSION is a user-visible string. It may contain non-numeric
+ * suffixes (e.g. "26v1"). The numeric major/minor/patch macros remain
+ * available for code that relies on numeric version values.
+ */
+#define BRIDGEENGINE_VERSION "@BRIDGEENGINE_VERSION_STRING@"
 #define BRIDGEENGINE_MAJOR @PROJECT_VERSION_MAJOR@
 #define BRIDGEENGINE_MINOR @PROJECT_VERSION_MINOR@
 #define BRIDGEENGINE_PATCH @PROJECT_VERSION_PATCH@
