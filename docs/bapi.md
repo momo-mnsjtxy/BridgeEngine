@@ -574,6 +574,180 @@ int bapi_level_manager_save_to_xml(bapi_level_manager_t manager, const char *fil
 </levels>
 ```
 
+### UI XML
+
+UI XML 是独立于 scene/level 持久化的受限界面描述格式，不是通用 XML parser。
+
+```c
+typedef struct bapi_ui_internal *bapi_ui_t;
+typedef struct bapi_ui_component_internal *bapi_ui_component_t;
+
+bapi_ui_t bapi_ui_load_from_xml(const char *filepath);
+void bapi_ui_destroy(bapi_ui_t ui);
+void bapi_ui_update(bapi_ui_t ui, const bapi_event_t *event);
+void bapi_ui_render(bapi_ui_t ui);
+void bapi_ui_layout(bapi_ui_t ui);
+int bapi_ui_was_clicked(bapi_ui_t ui, const char *id);
+bapi_ui_component_t bapi_ui_find(bapi_ui_t ui, const char *id);
+bapi_ui_component_type_t bapi_ui_component_get_type(bapi_ui_component_t component);
+void bapi_ui_component_get_rect(bapi_ui_component_t component, bapi_rect_t *out_rect);
+int bapi_ui_component_is_visible(bapi_ui_component_t component);
+void bapi_ui_component_set_visible(bapi_ui_component_t component, int visible);
+int bapi_ui_component_is_enabled(bapi_ui_component_t component);
+void bapi_ui_component_set_enabled(bapi_ui_component_t component, int enabled);
+const char *bapi_ui_component_get_text(bapi_ui_component_t component);
+int bapi_ui_component_set_text(bapi_ui_component_t component, const char *text);
+float bapi_ui_component_get_value(bapi_ui_component_t component);
+int bapi_ui_component_set_value(bapi_ui_component_t component, float value);
+int bapi_ui_component_is_checked(bapi_ui_component_t component);
+int bapi_ui_component_is_focused(bapi_ui_component_t component);
+int bapi_ui_component_get_selected_index(bapi_ui_component_t component);
+int bapi_ui_component_set_selected_index(bapi_ui_component_t component, int index);
+float bapi_ui_component_get_scroll_offset(bapi_ui_component_t component);
+int bapi_ui_component_set_scroll_offset(bapi_ui_component_t component, float offset);
+```
+
+`bapi_ui_load_from_xml` 加载一个 `<ui>` 根节点及其自闭合组件。UI XML 只描述界面的静态结构和
+视觉属性，不在 XML 里绑定 C 回调；业务逻辑应通过组件 `id` 在 C 代码中处理。组件按照 XML
+出现的顺序渲染，后面的组件会覆盖前面的组件。UI 对象拥有组件树、文本和纹理/视频资源，
+必须使用 `bapi_ui_destroy` 释放。文件打不开、组件属性非法、未知组件、重复 `id` 或资源加载
+失败时返回 `NULL`。
+
+`bapi_ui_update` 将事件派发给当前最上层的可交互组件。重叠组件按 XML 顺序决定层级，后出现的
+组件优先命中；鼠标必须在同一组件内按下和释放才算点击。`bapi_ui_was_clicked(ui, id)` 返回
+1；查询非按钮或未知 `id` 返回 0。点击状态在下一次 `bapi_ui_update` 时更新。
+
+文件格式约束：
+
+- 根节点必须是 `<ui>`。根节点可以为空：`<ui></ui>` 或 `<ui />`。
+- 叶子组件必须是自闭合标签，例如 `<button ... />`；容器组件可以使用成对标签包含子组件。
+- 属性必须使用双引号。支持属性跨行。
+- 支持 XML 声明 `<?xml version="1.0" encoding="UTF-8"?>` 和 `<!-- comment -->` 注释。
+- 支持基础 entity：`&amp;`、`&lt;`、`&gt;`、`&quot;`、`&apos;`。
+- 不支持百分比坐标、样式继承、脚本、回调名或通用 XML 解析能力。
+
+通用属性：
+
+- `id`：所有组件必填，必须非空，且在同一个 UI 文件内唯一。C 代码通过它查询按钮状态。
+- `x` / `y`：组件左上角位置，单位是当前渲染坐标中的像素。
+- `w` / `h`：组件宽高。`rect`、`button`、`image` 必填。
+- `visible` / `enabled`：可选布尔值，接受 `true`、`false`、`1`、`0`、`yes`。
+- `relative`：可选布尔值。为 `true` 时，组件坐标相对于父容器；默认为绝对坐标。
+- `text`：文本组件或交互组件的初始文本。文本中的 `&amp;` 等基础 entity 会被解码。
+- 颜色写成 `#RRGGBB` 或 `#RRGGBBAA`。省略 alpha 时按 `255` 处理。
+
+查询 API 返回的是 UI 内部借用句柄，不需要也不能单独释放。`bapi_ui_find` 按 `id` 在整棵
+组件树中查找；`bapi_ui_component_get_type` 返回组件类型；`get_rect`、`get_text`、`get_value`
+和状态查询用于读取组件当前状态。`set_visible`、`set_enabled`、`set_text`、`set_value`
+用于运行时修改组件。组件被 `bapi_ui_destroy` 销毁后，所有借用句柄失效。修改布局组件尺寸、
+子组件坐标或滚动偏移后调用 `bapi_ui_layout` 重新计算位置。`Tab` 在可交互组件之间移动焦点，
+`Enter` 激活焦点组件，`Esc` 清除焦点；`input` 支持可打印字符和 `KEY_BACKSPACE`，`max_length`
+限制文本长度。
+
+组件属性：
+
+```xml
+<rect id="panel" x="20" y="16" w="400" h="180" color="#20242CFF" />
+```
+
+`rect` 绘制一个实心矩形。必填属性：`id`、`x`、`y`、`w`、`h`、`color`。
+
+```xml
+<label id="title" x="40" y="24" text="Main Menu" size="28" color="#FFFFFFFF" />
+```
+
+`label` 绘制一段文本。必填属性：`id`、`x`、`y`、`text`、`size`、`color`。文本使用当前引擎
+文字系统，字体加载失败时不会绘制文本。
+
+```xml
+<button id="start" x="40" y="80" w="180" h="48" text="Start"
+        text_size="20" normal="#2F80EDFF" hover="#56CCF2FF"
+        click="#1C5DB8FF" text_color="#FFFFFFFF" />
+```
+
+`button` 使用内置按钮样式和鼠标状态。必填属性：`id`、`x`、`y`、`w`、`h`、`text`、
+`text_size`、`normal`、`hover`、`click`、`text_color`。`normal` 是默认颜色，`hover` 是鼠标
+悬停颜色，`click` 是按下状态颜色，`text_color` 是按钮文字颜色。
+
+```xml
+<image id="logo" x="260" y="24" w="128" h="128" src="assets/logo.png" />
+```
+
+`image` 加载并绘制一张纹理。必填属性：`id`、`x`、`y`、`w`、`h`、`src`。`src` 可以是绝对路径，
+也可以是相对路径；相对路径基于 XML 文件所在目录，而不是进程当前工作目录。图片加载失败时，
+整个 `bapi_ui_load_from_xml` 返回 `NULL`。
+
+`progress` 和 `slider` 使用 `value`、`min`、`max` 属性。内部绘制会把数值归一化到 `[0, 1]`，
+因此 `min="20" max="100" value="50"` 会绘制为 37.5% 的进度。`slider` 点击轨道后更新
+`value`，`bapi_ui_component_set_value` 也会自动限制到 `[min, max]`。
+
+`checkbox`、`toggle` 和 `radio` 通过 `checked` 查询当前状态；同一父容器中的 `radio` 互斥。
+`select`、`list` 和 `tab` 使用 `items` 和 selected index 作为基础选择模型：
+`bapi_ui_component_get_selected_index` 查询索引，`bapi_ui_component_set_selected_index` 修改索引。
+`scroll` 使用 `bapi_ui_component_get_scroll_offset` / `bapi_ui_component_set_scroll_offset` 管理
+垂直偏移，修改后调用 `bapi_ui_layout`；滚动容器外的子组件不会参与命中和绘制。
+XJ380 后端会把 `video` 组件降级为不可见、禁用节点，使同一份 UI XML 可以继续加载。
+
+绘制和布局组件：
+
+- `line`：使用 `x`、`y`、`w`、`h` 表示起点和终点偏移，使用 `color` 绘制线段。
+- `circle`：使用 `x`、`y`、`radius` 和 `color`。`checked="true"` 时绘制实心圆，否则绘制圆框。
+- `polygon`：使用 `x`、`y`、`radius`、`sides` 和 `color` 绘制多边形。
+- `border`：使用 `x`、`y`、`w`、`h` 和 `color` 绘制矩形边框。
+- `progress`：使用 `x`、`y`、`w`、`h`、`value`、`min`、`max`、`color` 和可选 `color2` 绘制进度条。
+- `separator`：使用矩形属性绘制分隔线。
+- `panel` / `container`：绘制背景并可包含子组件。
+- `row` / `column`：按 `step` 间距沿横向/纵向排列子组件。
+- `grid`：按 `columns` 和 `step` 将子组件排列为网格。
+
+交互组件：
+
+- `checkbox`、`radio`、`toggle`：点击后修改 `checked` 状态；同一容器下的 `radio` 互斥。
+- `slider`：点击轨道修改 `value`，使用 `min` 和 `max` 限制范围。
+- `input`：点击后获得焦点；键盘输入追加到 `text`，`KEY_BACKSPACE` 删除末尾字符。
+- `select`、`list`、`tab`：当前提供可查询、可点击的文本组件基础行为，选项数据和弹出菜单由调用方管理。
+- `scroll`、`canvas`：作为可嵌套的布局/扩展节点，目前不提供自动滚动或自定义绘制回调。
+- `video`：使用 `src` 加载视频并按组件矩形渲染；视频后端加载失败会使整个 UI 加载失败。
+- `nine_patch`、`animation`、`tooltip`、`modal`、`popup`：提供 XML 节点和基础渲染/容器行为；高级资源切片、
+  动画时间轴、弹层管理和自动定位由调用方通过组件属性或业务代码控制。
+
+典型使用方式是在场景初始化时加载 UI，在事件循环中更新 UI，在场景渲染回调中渲染 UI：
+
+```c
+static bapi_ui_t menu_ui;
+
+static void menu_render(bapi_scene_t scene)
+{
+	(void)scene;
+	bapi_ui_render(menu_ui);
+}
+
+/* 初始化阶段 */
+menu_ui = bapi_ui_load_from_xml("assets/ui/menu.xml");
+
+/* 事件循环中，仅在对应场景活跃时更新 */
+bapi_ui_update(menu_ui, &event);
+if (bapi_ui_was_clicked(menu_ui, "start")) {
+	bapi_scene_manager_switch_scene(scene_manager, "game");
+}
+
+/* 退出阶段 */
+bapi_ui_destroy(menu_ui);
+```
+
+示例：
+
+```xml
+<ui>
+  <rect id="panel" x="20" y="16" w="400" h="180" color="#20242CFF" />
+  <label id="title" x="40" y="24" text="Main Menu" size="28" color="#FFFFFFFF" />
+  <button id="start" x="40" y="80" w="180" h="48" text="Start"
+          text_size="20" normal="#2F80EDFF" hover="#56CCF2FF"
+          click="#1C5DB8FF" text_color="#FFFFFFFF" />
+  <image id="logo" x="260" y="24" w="128" h="128" src="assets/logo.png" />
+</ui>
+```
+
 ## 数学、日志与版本
 
 ### 向量

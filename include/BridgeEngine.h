@@ -2,9 +2,9 @@
 
 #include "bridgeengine_version.h"
 
-#include <stddef.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -20,6 +20,8 @@ typedef struct bapi_scene_internal		   *bapi_scene_t;
 typedef struct bapi_scene_manager_internal *bapi_scene_manager_t;
 typedef struct bapi_level_internal		   *bapi_level_t;
 typedef struct bapi_level_manager_internal *bapi_level_manager_t;
+typedef struct bapi_ui_internal			   *bapi_ui_t;
+typedef struct bapi_ui_component_internal  *bapi_ui_component_t;
 typedef struct bapi_file_internal		   *bapi_file_t;
 
 typedef struct {
@@ -37,13 +39,13 @@ typedef struct {
 } bapi_rect_t;
 
 typedef enum {
-	BAPI_EVENT_QUIT = 0,
-	BAPI_EVENT_KEY_DOWN = 1,
+	BAPI_EVENT_QUIT				 = 0,
+	BAPI_EVENT_KEY_DOWN			 = 1,
 	BAPI_EVENT_MOUSE_BUTTON_DOWN = 2,
-	BAPI_EVENT_MOUSE_BUTTON_UP = 3,
-	BAPI_EVENT_MOUSE_MOTION = 4,
-	BAPI_EVENT_KEY_UP = 5,
-	BAPI_EVENT_UNKNOWN = 6,
+	BAPI_EVENT_MOUSE_BUTTON_UP	 = 3,
+	BAPI_EVENT_MOUSE_MOTION		 = 4,
+	BAPI_EVENT_KEY_UP			 = 5,
+	BAPI_EVENT_UNKNOWN			 = 6,
 } bapi_event_type_t;
 
 typedef struct {
@@ -162,6 +164,40 @@ typedef enum {
 	BAPI_LOG_LEVEL_NONE,
 } bapi_log_level_t;
 
+typedef enum {
+	BAPI_UI_COMPONENT_RECT = 0,
+	BAPI_UI_COMPONENT_LABEL,
+	BAPI_UI_COMPONENT_BUTTON,
+	BAPI_UI_COMPONENT_IMAGE,
+	BAPI_UI_COMPONENT_LINE,
+	BAPI_UI_COMPONENT_CIRCLE,
+	BAPI_UI_COMPONENT_POLYGON,
+	BAPI_UI_COMPONENT_BORDER,
+	BAPI_UI_COMPONENT_PROGRESS,
+	BAPI_UI_COMPONENT_SEPARATOR,
+	BAPI_UI_COMPONENT_PANEL,
+	BAPI_UI_COMPONENT_CONTAINER,
+	BAPI_UI_COMPONENT_ROW,
+	BAPI_UI_COMPONENT_COLUMN,
+	BAPI_UI_COMPONENT_GRID,
+	BAPI_UI_COMPONENT_CHECKBOX,
+	BAPI_UI_COMPONENT_RADIO,
+	BAPI_UI_COMPONENT_TOGGLE,
+	BAPI_UI_COMPONENT_SLIDER,
+	BAPI_UI_COMPONENT_INPUT,
+	BAPI_UI_COMPONENT_SELECT,
+	BAPI_UI_COMPONENT_LIST,
+	BAPI_UI_COMPONENT_SCROLL,
+	BAPI_UI_COMPONENT_TAB,
+	BAPI_UI_COMPONENT_VIDEO,
+	BAPI_UI_COMPONENT_CANVAS,
+	BAPI_UI_COMPONENT_NINE_PATCH,
+	BAPI_UI_COMPONENT_ANIMATION,
+	BAPI_UI_COMPONENT_TOOLTIP,
+	BAPI_UI_COMPONENT_MODAL,
+	BAPI_UI_COMPONENT_POPUP,
+} bapi_ui_component_type_t;
+
 typedef struct {
 	bapi_log_level_t min_level;
 	bool			 use_colors;
@@ -169,9 +205,9 @@ typedef struct {
 	const char		*log_file_path;
 } bapi_log_config_t;
 
-int				bapi_engine_init(const char *title, int width, int height);
+int bapi_engine_init(const char *title, int width, int height);
 /* Releases all engine resources; resource handles are invalid after this call. */
-void			bapi_engine_quit(void);
+void bapi_engine_quit(void);
 /* Borrowed handles; valid only from bapi_engine_init() through bapi_engine_quit(). */
 bapi_window_t	bapi_engine_get_window(void);
 bapi_renderer_t bapi_engine_get_renderer(void);
@@ -311,20 +347,20 @@ bapi_circle_t bapi_circle(float x, float y, float radius);
  * are unspecified. Rectangle/AABB queries require positive-area overlap, while
  * circle queries count touching as an intersection.
  */
-int			  bapi_rect_contains_point(bapi_rect_t rect, bapi_vec2_t point);
-int			  bapi_rect_intersects(bapi_rect_t a, bapi_rect_t b);
-bapi_rect_t	  bapi_rect_intersection(bapi_rect_t a, bapi_rect_t b);
-bapi_rect_t	  bapi_rect_union(bapi_rect_t a, bapi_rect_t b);
-bapi_vec2_t	  bapi_rect_center(bapi_rect_t rect);
-int			  bapi_circle_contains_point(bapi_circle_t circle, bapi_vec2_t point);
-int			  bapi_circle_intersects_circle(bapi_circle_t a, bapi_circle_t b);
-int			  bapi_circle_intersects_rect(bapi_circle_t circle, bapi_rect_t rect);
+int			bapi_rect_contains_point(bapi_rect_t rect, bapi_vec2_t point);
+int			bapi_rect_intersects(bapi_rect_t a, bapi_rect_t b);
+bapi_rect_t bapi_rect_intersection(bapi_rect_t a, bapi_rect_t b);
+bapi_rect_t bapi_rect_union(bapi_rect_t a, bapi_rect_t b);
+bapi_vec2_t bapi_rect_center(bapi_rect_t rect);
+int			bapi_circle_contains_point(bapi_circle_t circle, bapi_vec2_t point);
+int			bapi_circle_intersects_circle(bapi_circle_t a, bapi_circle_t b);
+int			bapi_circle_intersects_rect(bapi_circle_t circle, bapi_rect_t rect);
 /* Alias of bapi_rect_intersects with identical positive-area semantics. */
-int			  bapi_collision_aabb(bapi_rect_t a, bapi_rect_t b);
-float		  bapi_clamp(float value, float min, float max);
-float		  bapi_lerp(float a, float b, float t);
-float		  bapi_deg_to_rad(float degrees);
-float		  bapi_rad_to_deg(float radians);
+int	  bapi_collision_aabb(bapi_rect_t a, bapi_rect_t b);
+float bapi_clamp(float value, float min, float max);
+float bapi_lerp(float a, float b, float t);
+float bapi_deg_to_rad(float degrees);
+float bapi_rad_to_deg(float radians);
 
 bapi_scene_t		 bapi_scene_create(const char *name, bapi_scene_callbacks_t callbacks);
 void				 bapi_scene_destroy(bapi_scene_t scene);
@@ -368,6 +404,30 @@ bapi_scene_manager_t bapi_scene_manager_load_from_xml(const char *filepath);
 bapi_level_manager_t bapi_level_manager_load_from_xml(const char *filepath);
 int bapi_scene_manager_save_to_xml(bapi_scene_manager_t manager, const char *filepath);
 int bapi_level_manager_save_to_xml(bapi_level_manager_t manager, const char *filepath);
+
+bapi_ui_t				 bapi_ui_load_from_xml(const char *filepath);
+void					 bapi_ui_destroy(bapi_ui_t ui);
+void					 bapi_ui_update(bapi_ui_t ui, const bapi_event_t *event);
+void					 bapi_ui_render(bapi_ui_t ui);
+void					 bapi_ui_layout(bapi_ui_t ui);
+int						 bapi_ui_was_clicked(bapi_ui_t ui, const char *id);
+bapi_ui_component_t		 bapi_ui_find(bapi_ui_t ui, const char *id);
+bapi_ui_component_type_t bapi_ui_component_get_type(bapi_ui_component_t component);
+void		bapi_ui_component_get_rect(bapi_ui_component_t component, bapi_rect_t *out_rect);
+int			bapi_ui_component_is_visible(bapi_ui_component_t component);
+void		bapi_ui_component_set_visible(bapi_ui_component_t component, int visible);
+int			bapi_ui_component_is_enabled(bapi_ui_component_t component);
+void		bapi_ui_component_set_enabled(bapi_ui_component_t component, int enabled);
+const char *bapi_ui_component_get_text(bapi_ui_component_t component);
+int			bapi_ui_component_set_text(bapi_ui_component_t component, const char *text);
+float		bapi_ui_component_get_value(bapi_ui_component_t component);
+int			bapi_ui_component_set_value(bapi_ui_component_t component, float value);
+int			bapi_ui_component_is_checked(bapi_ui_component_t component);
+int			bapi_ui_component_is_focused(bapi_ui_component_t component);
+int			bapi_ui_component_get_selected_index(bapi_ui_component_t component);
+int			bapi_ui_component_set_selected_index(bapi_ui_component_t component, int index);
+float		bapi_ui_component_get_scroll_offset(bapi_ui_component_t component);
+int			bapi_ui_component_set_scroll_offset(bapi_ui_component_t component, float offset);
 
 const char *bridgeengine_get_version(void);
 int			bridgeengine_get_version_number(void);

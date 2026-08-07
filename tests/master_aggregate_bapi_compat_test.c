@@ -1,15 +1,20 @@
 #define BAPI_LOG_ENABLED
-#include <BridgeEngine.h>
 #include "master_aggregate_bapi_compat_members.h"
 #include "master_aggregate_bapi_compat_signatures.h"
+#include <BridgeEngine.h>
 #if defined(_MSC_VER) && !defined(__clang__)
-#define CHECK_SIGNATURE(symbol, type) typedef char symbol##_exists[(sizeof(&(symbol)) > 0) ? 1 : -1];
-#define CHECK_MEMBER(type, member, expected) typedef char type##_##member##_exists[(sizeof(((type *)0)->member) > 0) ? 1 : -1];
+#define CHECK_SIGNATURE(symbol, type)                                                              \
+	typedef char symbol##_exists[(sizeof(&(symbol)) > 0) ? 1 : -1];
+#define CHECK_MEMBER(type, member, expected)                                                       \
+	typedef char type##_##member##_exists[(sizeof(((type *)0)->member) > 0) ? 1 : -1];
 #define CHECK_TYPE(type, expected) typedef char type##_exists[(sizeof(type) > 0) ? 1 : -1];
 #else
-#define CHECK_SIGNATURE(symbol, type) _Static_assert(_Generic(&(symbol), type: 1, default: 0), #symbol);
-#define CHECK_MEMBER(type, member, expected) _Static_assert(_Generic(((type *)0)->member, expected: 1, default: 0), #type "." #member);
-#define CHECK_TYPE(type, expected) _Static_assert(_Generic((type)0, expected: 1, default: 0), #type);
+#define CHECK_SIGNATURE(symbol, type)                                                              \
+	_Static_assert(_Generic(&(symbol), type: 1, default: 0), #symbol);
+#define CHECK_MEMBER(type, member, expected)                                                       \
+	_Static_assert(_Generic(((type *)0)->member, expected: 1, default: 0), #type "." #member);
+#define CHECK_TYPE(type, expected)                                                                 \
+	_Static_assert(_Generic((type)0, expected: 1, default: 0), #type);
 #endif
 #if defined(_MSC_VER) && !defined(__clang__)
 #define CHECK_VALUE(name, expression) typedef char name[(expression) ? 1 : -1];
@@ -29,6 +34,8 @@ CHECK_TYPE(bapi_scene_t, struct bapi_scene_internal *);
 CHECK_TYPE(bapi_scene_manager_t, struct bapi_scene_manager_internal *);
 CHECK_TYPE(bapi_level_t, struct bapi_level_internal *);
 CHECK_TYPE(bapi_level_manager_t, struct bapi_level_manager_internal *);
+CHECK_TYPE(bapi_ui_t, struct bapi_ui_internal *);
+CHECK_TYPE(bapi_ui_component_t, struct bapi_ui_component_internal *);
 CHECK_TYPE(bapi_scene_on_enter_fn, void (*)(bapi_scene_t));
 CHECK_TYPE(bapi_scene_on_exit_fn, void (*)(bapi_scene_t));
 CHECK_TYPE(bapi_scene_on_update_fn, void (*)(bapi_scene_t, float));
@@ -79,6 +86,29 @@ CHECK_SIGNATURE(bapi_log_shutdown, void (*)(void));
 CHECK_SIGNATURE(bapi_log_set_level, void (*)(bapi_log_level_t));
 CHECK_SIGNATURE(bridgeengine_get_version, const char *(*)(void));
 CHECK_SIGNATURE(bridgeengine_get_version_number, int (*)(void));
+CHECK_SIGNATURE(bapi_ui_load_from_xml, bapi_ui_t (*)(const char *));
+CHECK_SIGNATURE(bapi_ui_destroy, void (*)(bapi_ui_t));
+CHECK_SIGNATURE(bapi_ui_update, void (*)(bapi_ui_t, const bapi_event_t *));
+CHECK_SIGNATURE(bapi_ui_render, void (*)(bapi_ui_t));
+CHECK_SIGNATURE(bapi_ui_layout, void (*)(bapi_ui_t));
+CHECK_SIGNATURE(bapi_ui_was_clicked, int (*)(bapi_ui_t, const char *));
+CHECK_SIGNATURE(bapi_ui_find, bapi_ui_component_t (*)(bapi_ui_t, const char *));
+CHECK_SIGNATURE(bapi_ui_component_get_type, bapi_ui_component_type_t (*)(bapi_ui_component_t));
+CHECK_SIGNATURE(bapi_ui_component_get_rect, void (*)(bapi_ui_component_t, bapi_rect_t *));
+CHECK_SIGNATURE(bapi_ui_component_is_visible, int (*)(bapi_ui_component_t));
+CHECK_SIGNATURE(bapi_ui_component_set_visible, void (*)(bapi_ui_component_t, int));
+CHECK_SIGNATURE(bapi_ui_component_is_enabled, int (*)(bapi_ui_component_t));
+CHECK_SIGNATURE(bapi_ui_component_set_enabled, void (*)(bapi_ui_component_t, int));
+CHECK_SIGNATURE(bapi_ui_component_get_text, const char *(*)(bapi_ui_component_t));
+CHECK_SIGNATURE(bapi_ui_component_set_text, int (*)(bapi_ui_component_t, const char *));
+CHECK_SIGNATURE(bapi_ui_component_get_value, float (*)(bapi_ui_component_t));
+CHECK_SIGNATURE(bapi_ui_component_set_value, int (*)(bapi_ui_component_t, float));
+CHECK_SIGNATURE(bapi_ui_component_is_checked, int (*)(bapi_ui_component_t));
+CHECK_SIGNATURE(bapi_ui_component_is_focused, int (*)(bapi_ui_component_t));
+CHECK_SIGNATURE(bapi_ui_component_get_selected_index, int (*)(bapi_ui_component_t));
+CHECK_SIGNATURE(bapi_ui_component_set_selected_index, int (*)(bapi_ui_component_t, int));
+CHECK_SIGNATURE(bapi_ui_component_get_scroll_offset, float (*)(bapi_ui_component_t));
+CHECK_SIGNATURE(bapi_ui_component_set_scroll_offset, int (*)(bapi_ui_component_t, float));
 
 CHECK_SIGNATURE(bapi_event_get_type, int (*)(const bapi_event_t *));
 CHECK_SIGNATURE(bapi_event_get_key_code, uint8_t (*)(const bapi_event_t *));
@@ -91,7 +121,9 @@ CHECK_SIGNATURE(bapi_event_is_mouse_button_down, int (*)(const bapi_event_t *));
 CHECK_SIGNATURE(bapi_event_is_mouse_button_up, int (*)(const bapi_event_t *));
 CHECK_SIGNATURE(bapi_event_is_mouse_motion, int (*)(const bapi_event_t *));
 CHECK_SIGNATURE(bapi_color_from_hex, bapi_color_t (*)(uint32_t));
-CHECK_SIGNATURE(bapi_create_button, bapi_button_t *(*)(float, float, float, float, const char *, bapi_color_t, bapi_color_t, bapi_color_t, bapi_color_t, float));
+CHECK_SIGNATURE(bapi_create_button,
+				bapi_button_t *(*)(float, float, float, float, const char *, bapi_color_t,
+								   bapi_color_t, bapi_color_t, bapi_color_t, float));
 CHECK_SIGNATURE(bapi_destroy_button, void (*)(bapi_button_t *));
 CHECK_SIGNATURE(bapi_button_update, int (*)(bapi_button_t *, const bapi_event_t *));
 CHECK_SIGNATURE(bapi_button_render, void (*)(bapi_button_t *));
@@ -134,14 +166,18 @@ CHECK_SIGNATURE(bapi_level_manager_load_from_xml, bapi_level_manager_t (*)(const
 CHECK_SIGNATURE(bapi_scene_manager_save_to_xml, int (*)(bapi_scene_manager_t, const char *));
 CHECK_SIGNATURE(bapi_level_manager_save_to_xml, int (*)(bapi_level_manager_t, const char *));
 
-CHECK_VALUE(bapi_event_values, BAPI_EVENT_QUIT == 0 && BAPI_EVENT_KEY_DOWN == 1 && BAPI_EVENT_MOUSE_BUTTON_DOWN == 2 &&
-			BAPI_EVENT_MOUSE_BUTTON_UP == 3 && BAPI_EVENT_MOUSE_MOTION == 4)
-CHECK_VALUE(bapi_special_key_values, KEY_ESC == 128 && KEY_BACKSPACE == 129 && KEY_TAB == 130 && KEY_ENTER == 131 &&
-			KEY_CAPS == 132 && KEY_SHIFT == 133 && KEY_CTRL == 134 && KEY_ALT == 135 && KEY_SPACE == 136 &&
-			KEY_F1 == 137 && KEY_F12 == 148 && KEY_NUML == 149 && KEY_SCROLL == 150)
+CHECK_VALUE(bapi_event_values, BAPI_EVENT_QUIT == 0 && BAPI_EVENT_KEY_DOWN == 1 &&
+								   BAPI_EVENT_MOUSE_BUTTON_DOWN == 2 &&
+								   BAPI_EVENT_MOUSE_BUTTON_UP == 3 && BAPI_EVENT_MOUSE_MOTION == 4)
+CHECK_VALUE(bapi_special_key_values, KEY_ESC == 128 && KEY_BACKSPACE == 129 && KEY_TAB == 130 &&
+										 KEY_ENTER == 131 && KEY_CAPS == 132 && KEY_SHIFT == 133 &&
+										 KEY_CTRL == 134 && KEY_ALT == 135 && KEY_SPACE == 136 &&
+										 KEY_F1 == 137 && KEY_F12 == 148 && KEY_NUML == 149 &&
+										 KEY_SCROLL == 150)
 CHECK_VALUE(bapi_button_left_value, BAPI_BUTTON_LEFT == 1)
-CHECK_VALUE(bapi_log_level_values, BAPI_LOG_LEVEL_DEBUG == 0 && BAPI_LOG_LEVEL_INFO == 1 && BAPI_LOG_LEVEL_WARN == 2 &&
-			BAPI_LOG_LEVEL_ERROR == 3 && BAPI_LOG_LEVEL_CRITICAL == 4 && BAPI_LOG_LEVEL_NONE == 5)
+CHECK_VALUE(bapi_log_level_values, BAPI_LOG_LEVEL_DEBUG == 0 && BAPI_LOG_LEVEL_INFO == 1 &&
+									   BAPI_LOG_LEVEL_WARN == 2 && BAPI_LOG_LEVEL_ERROR == 3 &&
+									   BAPI_LOG_LEVEL_CRITICAL == 4 && BAPI_LOG_LEVEL_NONE == 5)
 
 int main(void)
 {
@@ -152,9 +188,8 @@ int main(void)
 	BAPI_LOG_ERROR("master aggregate compatibility");
 	BAPI_LOG_CRITICAL("master aggregate compatibility");
 	BAPI_LOG_ASSERT(1, "master aggregate compatibility");
-	if (0)
-		BAPI_LOG_INIT_DEFAULT();
+	if (0) BAPI_LOG_INIT_DEFAULT();
 	return BRIDGEENGINE_MAJOR < 0 || BRIDGEENGINE_MINOR < 0 || BRIDGEENGINE_PATCH < 0 ||
-			   BRIDGEENGINE_VERSION[0] == '\0' || bridgeengine_get_version()[0] == '\0' ||
-			   bridgeengine_get_version_number() < 0 || color.a != 4;
+		   BRIDGEENGINE_VERSION[0] == '\0' || bridgeengine_get_version()[0] == '\0' ||
+		   bridgeengine_get_version_number() < 0 || color.a != 4;
 }

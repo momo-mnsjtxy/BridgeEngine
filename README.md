@@ -148,7 +148,7 @@ XJ380 后端使用 XAPI 内置文本绘制，当前不加载 TTF 文件。XJ380 
 BridgeEngine 的运行时为单实例、单线程调用模型；当前 context-less API 不承诺多实例或并发调用。
 `BridgeEngine.h` 继续是完整聚合入口，模块化头仅作为增量兼容路径。
 
-XML 持久化仅支持当前 scene/level 的受限格式，不是通用 XML parser。当前兼容补丁刻意不改变
+XML 持久化和 UI XML 仅支持各自的受限格式，不是通用 XML parser。当前兼容补丁刻意不改变
 scene/level 所有权、圆形或多边形的填充视觉语义、XML 字节格式，或无 PTS 视频的 FPS fallback。
 XML 转义、真正的填充绘制、PTS/VFR 调度和 scene/level 所有权模型均为后续版本的独立设计工作。
 

@@ -63,10 +63,9 @@ static void ball_draw(const Ball *ball)
 
 static bapi_scene_manager_t g_scene_manager = NULL;
 static bapi_level_manager_t g_level_manager = NULL;
-static bapi_button_t	   *g_demo_button	= NULL;
+static bapi_ui_t			g_demo_ui		= NULL;
 static bapi_sound_t			g_test_sound	= NULL;
 static bapi_video_t			g_test_video	= NULL;
-static bapi_texture_t		g_logo_texture	= NULL;
 static bapi_camera_t		g_camera;
 
 static Ball g_balls[NUM_BALLS] = {
@@ -81,74 +80,6 @@ static bapi_vec2_t g_player_vel = {0, 0};
 static int	  g_collision_count = 0;
 static char	  g_collision_text[64] = "";
 static int	  g_fps				   = 0;
-
-static void draw_panel(int x, int y, int w, int h, const char *title)
-{
-	bapi_fill_rect(x, y, w, h, COLOR_PANEL_BG);
-	bapi_draw_rect(x, y, w, h, COLOR_PANEL_BORDER);
-	if (title != NULL) {
-		float tw, th;
-		bapi_get_text_size(title, 20, &tw, &th);
-		bapi_draw_text(title, (float)(x + (int)(w - tw) / 2), (float)y + 10, 20, COLOR_WHITE);
-	}
-}
-
-static void draw_header(void)
-{
-	bapi_fill_rect(0, 0, (float)WINDOW_WIDTH, 50, COLOR_PANEL_BG);
-	bapi_draw_text("BridgeEngine v1.0", 20, 12, 28, COLOR_WHITE);
-	bapi_draw_text("Scene & Level Management Demo", (float)CENTER_X - 140, 15, 20, COLOR_CYAN);
-
-	char fps_text[32];
-	snprintf(fps_text, sizeof(fps_text), "FPS: %d", g_fps);
-	bapi_draw_text(fps_text, (float)WINDOW_WIDTH - 120, 15, 20, COLOR_YELLOW);
-}
-
-static void draw_help_panel(void)
-{
-	draw_panel(WINDOW_WIDTH - 260, 100, 250, 270, "Controls");
-	bapi_draw_text("1 - Menu Scene", WINDOW_WIDTH - 245, 140, 18, COLOR_CYAN);
-	bapi_draw_text("2 - Game Scene", WINDOW_WIDTH - 245, 165, 18, COLOR_GREEN);
-	bapi_draw_text("3 - Settings Scene", WINDOW_WIDTH - 245, 190, 18, COLOR_ORANGE);
-	bapi_draw_text("4 - Video Scene", WINDOW_WIDTH - 245, 215, 18, COLOR_MAGENTA);
-	bapi_draw_text("5 - Input/Camera Scene", WINDOW_WIDTH - 245, 240, 18, COLOR_YELLOW);
-	bapi_draw_text("N - Next Level", WINDOW_WIDTH - 245, 275, 18, COLOR_YELLOW);
-	bapi_draw_text("P - Prev Level", WINDOW_WIDTH - 245, 300, 18, COLOR_YELLOW);
-	bapi_draw_text("WASD/Arrows - Move", WINDOW_WIDTH - 245, 325, 18, COLOR_CYAN);
-	bapi_draw_text("ESC - Exit", WINDOW_WIDTH - 245, 350, 18, COLOR_RED);
-}
-
-static void draw_color_palette(void)
-{
-	const int   size	  = 50;
-	const int   gap		  = 5;
-	const int   start_x	  = 50;
-	const int   y		  = WINDOW_HEIGHT - 80;
-	const uint32_t colors[] = {0xFF0000FF, 0x00FF00FF, 0x0000FFFF, 0xFFFF00FF,
-							   0xFF00FFFF, 0x00FFFFFF, 0xFFFFFFFF, 0x808080FF};
-
-	for (int i = 0; i < (int)(sizeof(colors) / sizeof(colors[0])); i++) {
-		int x = start_x + i * (size + gap);
-		bapi_fill_rect((float)x, (float)y, (float)size, (float)size,
-					   bapi_color_from_hex(colors[i]));
-		bapi_draw_rect((float)x, (float)y, (float)size, (float)size, COLOR_WHITE);
-	}
-}
-
-static void draw_shapes_demo(void)
-{
-	draw_panel(50, 450, 400, 150, "Shapes Demo");
-	bapi_draw_circle(120, 520, 35, COLOR_RED);
-	bapi_fill_circle(200, 520, 30, COLOR_GREEN);
-	bapi_draw_polygon(300, 520, 30, 3, COLOR_YELLOW);
-	bapi_fill_polygon(380, 520, 30, 4, COLOR_CYAN);
-}
-
-static void draw_collision_info(void)
-{
-	draw_panel(50, 350, 300, 80, "Collision");
-	bapi_draw_text(g_collision_text, 60, 390, 18, COLOR_WHITE);
-}
 
 static void on_scene_menu_enter(bapi_scene_t scene)
 {
@@ -170,8 +101,6 @@ static void on_scene_menu_update(bapi_scene_t scene, float dt)
 static void on_scene_menu_render(bapi_scene_t scene)
 {
 	(void)scene;
-	bapi_draw_text("MENU", (float)CENTER_X - 50, 150, 48, COLOR_YELLOW);
-	bapi_draw_text("Welcome to BridgeEngine Demo!", (float)CENTER_X - 150, 220, 24, COLOR_WHITE);
 }
 
 static void on_scene_game_enter(bapi_scene_t scene)
@@ -195,11 +124,7 @@ static void on_scene_game_update(bapi_scene_t scene, float dt)
 static void on_scene_game_render(bapi_scene_t scene)
 {
 	(void)scene;
-	bapi_draw_text("GAME", (float)CENTER_X - 40, 150, 48, COLOR_GREEN);
 	for (int i = 0; i < NUM_BALLS; i++) ball_draw(&g_balls[i]);
-	draw_panel(600, 450, 200, 150, "Circles");
-	bapi_draw_circle(680, 520, 35, COLOR_RED);
-	bapi_fill_circle(750, 520, 30, COLOR_GREEN);
 }
 
 static void on_scene_settings_enter(bapi_scene_t scene)
@@ -222,13 +147,6 @@ static void on_scene_settings_update(bapi_scene_t scene, float dt)
 static void on_scene_settings_render(bapi_scene_t scene)
 {
 	(void)scene;
-	bapi_draw_text("SETTINGS", (float)CENTER_X - 70, 150, 48, COLOR_ORANGE);
-	draw_panel(CENTER_X - 200, 220, 400, 250, "Configuration");
-	bapi_draw_text("Audio Volume: 80%", (float)CENTER_X - 80, 280, 20, COLOR_WHITE);
-	bapi_fill_rect((float)CENTER_X - 150, 310, 240, 20, COLOR_GRAY);
-	bapi_fill_rect((float)CENTER_X - 150, 310, 192, 20, COLOR_GREEN);
-	bapi_draw_text("Graphics: High", (float)CENTER_X - 60, 360, 20, COLOR_WHITE);
-	bapi_draw_text("Fullscreen: Off", (float)CENTER_X - 70, 400, 20, COLOR_WHITE);
 }
 
 static void on_scene_video_enter(bapi_scene_t scene)
@@ -253,23 +171,21 @@ static void on_scene_video_update(bapi_scene_t scene, float dt)
 static void on_scene_video_render(bapi_scene_t scene)
 {
 	(void)scene;
-	bapi_draw_text("VIDEO", (float)CENTER_X - 40, 50, 48, COLOR_MAGENTA);
 
 	if (g_test_video == NULL) {
-		bapi_draw_text("Video not loaded!", (float)CENTER_X - 80, (float)CENTER_Y, 24, COLOR_RED);
+		bapi_ui_component_set_visible(bapi_ui_find(g_demo_ui, "video_missing"), 1);
+		bapi_ui_component_set_visible(bapi_ui_find(g_demo_ui, "video_panel"), 0);
 		return;
 	}
+	bapi_ui_component_set_visible(bapi_ui_find(g_demo_ui, "video_missing"), 0);
+	bapi_ui_component_set_visible(bapi_ui_find(g_demo_ui, "video_panel"), 1);
 
 	int vw, vh;
 	bapi_video_get_size(g_test_video, &vw, &vh);
 	bapi_video_render_fit(g_test_video, 0, 100, WINDOW_WIDTH, WINDOW_HEIGHT - 250);
-
-	draw_panel(50, WINDOW_HEIGHT - 150, 300, 100, "Video Info");
-	bapi_draw_text("File: XINGJILOGE.mp4", 70, (float)WINDOW_HEIGHT - 115, 16, COLOR_WHITE);
-	char size_text[64];
-	snprintf(size_text, sizeof(size_text), "Size: %dx%d", vw, vh);
-	bapi_draw_text(size_text, 70, (float)WINDOW_HEIGHT - 90, 16, COLOR_WHITE);
-	bapi_draw_text("Status: Playing", 70, (float)WINDOW_HEIGHT - 65, 16, COLOR_GREEN);
+	char video_size[64];
+	snprintf(video_size, sizeof(video_size), "Size: %dx%d", vw, vh);
+	bapi_ui_component_set_text(bapi_ui_find(g_demo_ui, "video_size"), video_size);
 }
 
 static void on_scene_input_enter(bapi_scene_t scene)
@@ -348,25 +264,17 @@ static void on_scene_input_render(bapi_scene_t scene)
 	bapi_fill_rect(player_screen.x, player_screen.y, ps_w, ps_h, COLOR_CYAN);
 	bapi_draw_rect(player_screen.x, player_screen.y, ps_w, ps_h, COLOR_WHITE);
 
-	bapi_texture_render(g_logo_texture, 10, 10);
-
-	bapi_fill_rect(0, 550, WINDOW_WIDTH, 218, COLOR_DARK_BG);
-	bapi_draw_text("Input & Camera Demo", (float)CENTER_X - 120, 560, 28, COLOR_YELLOW);
-	bapi_draw_text("WASD/Arrows: Move  |  SHIFT: Sprint  |  Z/X: Zoom  |  1-4: Switch scenes",
-				   (float)CENTER_X - 300, 600, 18, COLOR_CYAN);
-
 	bapi_vec2_t mouse_world;
 	bapi_camera_screen_to_world(&g_camera, bapi_get_mouse_x(), bapi_get_mouse_y(), &mouse_world.x,
 								&mouse_world.y);
 	char info[128];
 	snprintf(info, sizeof(info), "Screen: (%.0f, %.0f)  World: (%.0f, %.0f)", bapi_get_mouse_x(),
 			 bapi_get_mouse_y(), mouse_world.x, mouse_world.y);
-	bapi_draw_text(info, (float)CENTER_X - 180, 630, 16, COLOR_WHITE);
+	bapi_ui_component_set_text(bapi_ui_find(g_demo_ui, "mouse_position"), info);
 
 	snprintf(info, sizeof(info), "View: (%.0f, %.0f, %.0f, %.0f)", view.x, view.y, view.w, view.h);
-	bapi_draw_text(info, (float)CENTER_X - 120, 655, 16, COLOR_GRAY);
-
-	bapi_draw_text(g_collision_text, (float)CENTER_X - 120, 680, 18, COLOR_GREEN);
+	bapi_ui_component_set_text(bapi_ui_find(g_demo_ui, "camera_view"), info);
+	bapi_ui_component_set_text(bapi_ui_find(g_demo_ui, "input_collision"), g_collision_text);
 
 	int mx = (int)bapi_get_mouse_x();
 	int my = (int)bapi_get_mouse_y();
@@ -394,11 +302,8 @@ static void on_level_render(bapi_level_t level)
 {
 	const char	*name	  = bapi_level_get_name(level);
 	int			 idx	  = bapi_level_get_index(level);
-	bapi_color_t colors[] = {bapi_color(34, 139, 34, 255), bapi_color(210, 180, 140, 255),
-							 bapi_color(0, 105, 148, 255)};
-	draw_panel(50, 100, 200, 80, "Current Level");
-	bapi_fill_rect(70, 145, 160, 25, colors[(idx - 1) % 3]);
-	bapi_draw_text(name, 90, 148, 18, COLOR_WHITE);
+	(void)idx;
+	bapi_ui_component_set_text(bapi_ui_find(g_demo_ui, "current_level"), name);
 }
 
 static void handle_keyboard(uint8_t key)
@@ -469,22 +374,14 @@ static void setup_video(void)
 	BAPI_LOG_INFO("[Video] initialized; press 4 for the video scene");
 }
 
-static void setup_logo_texture(void)
+static void setup_menu_ui(void)
 {
-	g_logo_texture = bapi_texture_load("assets/image/XINGJI.png");
-	if (g_logo_texture != NULL) {
-		BAPI_LOG_INFO("[Texture] logo loaded");
+	g_demo_ui = bapi_ui_load_from_xml("assets/ui/demo.xml");
+	if (g_demo_ui != NULL) {
+		BAPI_LOG_INFO("[UI] demo UI loaded from assets/ui/demo.xml");
 	} else {
-		BAPI_LOG_WARN("[Texture] logo not found; continuing without it");
+		BAPI_LOG_WARN("[UI] demo XML not found; continuing without UI");
 	}
-}
-
-static void setup_button(void)
-{
-	g_demo_button =
-		bapi_create_button((float)CENTER_X - 80, (float)WINDOW_HEIGHT - 160, 160, 50, "Click Me!",
-						   bapi_color(60, 130, 60, 255), bapi_color(80, 160, 80, 255),
-						   bapi_color(40, 100, 40, 255), COLOR_WHITE, 22);
 }
 
 static void register_scenes(void)
@@ -525,7 +422,7 @@ static void shutdown(void)
 {
 	BAPI_LOG_INFO("Shutting down...");
 
-	bapi_destroy_button(g_demo_button);
+	bapi_ui_destroy(g_demo_ui);
 	bapi_scene_manager_destroy(g_scene_manager);
 	bapi_level_manager_destroy(g_level_manager);
 	bapi_text_cleanup();
@@ -542,8 +439,6 @@ static void shutdown(void)
 	}
 	bapi_video_cleanup();
 
-	if (g_logo_texture != NULL) bapi_texture_destroy(g_logo_texture);
-
 	bapi_input_cleanup();
 	bapi_mouse_cleanup();
 	bapi_engine_quit();
@@ -551,11 +446,21 @@ static void shutdown(void)
 	BAPI_LOG_INFO("Cleanup complete. Goodbye!");
 }
 
-static int is_menu_scene_active(void)
+static const char *current_scene_name(void)
 {
 	bapi_scene_t scene = bapi_scene_manager_get_current_scene(g_scene_manager);
-	const char	*name  = bapi_scene_get_name(scene);
-	return name != NULL && strcmp(name, "menu") == 0;
+	return bapi_scene_get_name(scene);
+}
+
+static void update_demo_ui_state(void)
+{
+	const char *scene = current_scene_name();
+	const char *visible_groups[] = {"help_ui", "level_ui", "menu_ui", "game_ui", "settings_ui",
+								  "video_ui", "input_ui"};
+	const char *scene_names[] = {"menu", "menu", "menu", "game", "settings", "video", "input"};
+	for (int i = 0; i < 7; i++)
+		bapi_ui_component_set_visible(bapi_ui_find(g_demo_ui, visible_groups[i]),
+								  scene != NULL && strcmp(scene, scene_names[i]) == 0);
 }
 
 int main(int argc, char *argv[])
@@ -582,8 +487,7 @@ int main(int argc, char *argv[])
 	register_levels();
 	setup_audio();
 	setup_video();
-	setup_logo_texture();
-	setup_button();
+	setup_menu_ui();
 
 	bapi_camera_init(&g_camera, (float)WINDOW_WIDTH, (float)WINDOW_HEIGHT);
 	g_camera.x = WINDOW_WIDTH * 0.5f;
@@ -618,7 +522,8 @@ int main(int argc, char *argv[])
 					handle_keyboard(key);
 			}
 			bapi_mouse_handle_event(&event);
-			if (bapi_button_update(g_demo_button, &event)) {
+			bapi_ui_update(g_demo_ui, &event);
+			if (bapi_ui_was_clicked(g_demo_ui, "demo_button")) {
 				BAPI_LOG_INFO("[Event] Button clicked!");
 			}
 		}
@@ -634,15 +539,12 @@ int main(int argc, char *argv[])
 		bapi_sound_update();
 		bapi_video_update();
 
-		draw_header();
-		if (is_menu_scene_active()) {
-			bapi_level_manager_render(g_level_manager);
-			draw_help_panel();
-			draw_color_palette();
-			draw_shapes_demo();
-			draw_collision_info();
-			bapi_button_render(g_demo_button);
-		}
+		bapi_level_manager_render(g_level_manager);
+		char fps_text[32];
+		snprintf(fps_text, sizeof(fps_text), "FPS: %d", g_fps);
+		bapi_ui_component_set_text(bapi_ui_find(g_demo_ui, "fps"), fps_text);
+		update_demo_ui_state();
+		bapi_ui_render(g_demo_ui);
 
 		bapi_mouse_render();
 

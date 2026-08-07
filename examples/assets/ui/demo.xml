@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui>
+  <panel id="header" x="0" y="0" w="1024" h="50" color="#28283CFF">
+    <label id="engine_title" x="20" y="12" text="BridgeEngine v1.0" size="28" color="#FFFFFFFF" />
+    <label id="demo_title" x="372" y="15" text="Scene &amp; Level Management Demo" size="20" color="#00FFFFFF" />
+    <label id="fps" x="900" y="15" text="FPS: 0" size="20" color="#FFFF00FF" />
+  </panel>
+
+  <panel id="help_ui" x="764" y="100" w="250" h="270" color="#28283CFF">
+    <label id="help_title" x="850" y="110" text="Controls" size="20" color="#FFFFFFFF" />
+    <label id="help_1" x="779" y="140" text="1 - Menu Scene" size="18" color="#00FFFFFF" />
+    <label id="help_2" x="779" y="165" text="2 - Game Scene" size="18" color="#00FF00FF" />
+    <label id="help_3" x="779" y="190" text="3 - Settings Scene" size="18" color="#FFA500FF" />
+    <label id="help_4" x="779" y="215" text="4 - Video Scene" size="18" color="#FF00FFFF" />
+    <label id="help_5" x="779" y="240" text="5 - Input/Camera Scene" size="18" color="#FFFF00FF" />
+    <label id="help_n" x="779" y="275" text="N - Next Level" size="18" color="#FFFF00FF" />
+    <label id="help_p" x="779" y="300" text="P - Prev Level" size="18" color="#FFFF00FF" />
+    <label id="help_move" x="779" y="325" text="WASD/Arrows - Move" size="18" color="#00FFFFFF" />
+    <label id="help_esc" x="779" y="350" text="ESC - Exit" size="18" color="#FF0000FF" />
+  </panel>
+
+  <panel id="level_ui" x="50" y="100" w="200" h="80" color="#28283CFF">
+    <label id="level_title" x="100" y="110" text="Current Level" size="20" color="#FFFFFFFF" />
+    <progress id="level_progress" x="70" y="145" w="160" h="25" value="0.33" color="#228B22FF" color2="#808080FF" />
+    <label id="current_level" x="90" y="148" text="Forest" size="18" color="#FFFFFFFF" />
+  </panel>
+
+  <panel id="menu_ui" x="0" y="0" w="1" h="1" color="#00000000">
+    <label id="menu_title" x="462" y="150" text="MENU" size="48" color="#FFFF00FF" />
+    <label id="menu_welcome" x="362" y="220" text="Welcome to BridgeEngine Demo!" size="24" color="#FFFFFFFF" />
+    <button id="demo_button" x="432" y="608" w="160" h="50" text="Click Me!"
+            text_size="22" normal="#3C823CFF" hover="#50A050FF" click="#286428FF"
+            text_color="#FFFFFFFF" />
+    <rect id="palette_red" x="50" y="688" w="50" h="50" color="#FF0000FF" />
+    <rect id="palette_green" x="105" y="688" w="50" h="50" color="#00FF00FF" />
+    <rect id="palette_blue" x="160" y="688" w="50" h="50" color="#0000FFFF" />
+    <rect id="palette_yellow" x="215" y="688" w="50" h="50" color="#FFFF00FF" />
+    <rect id="palette_magenta" x="270" y="688" w="50" h="50" color="#FF00FFFF" />
+    <rect id="palette_cyan" x="325" y="688" w="50" h="50" color="#00FFFFFF" />
+    <rect id="palette_white" x="380" y="688" w="50" h="50" color="#FFFFFFFF" />
+    <rect id="palette_gray" x="435" y="688" w="50" h="50" color="#808080FF" />
+    <panel id="collision_panel" x="50" y="350" w="300" h="80" color="#28283CFF">
+      <label id="collision_title" x="160" y="360" text="Collision" size="20" color="#FFFFFFFF" />
+      <label id="collision_text" x="60" y="390" text="No collision" size="18" color="#FFFFFFFF" />
+    </panel>
+    <panel id="shapes_panel" x="50" y="450" w="400" h="150" color="#28283CFF">
+      <label id="shapes_title" x="200" y="460" text="Shapes Demo" size="20" color="#FFFFFFFF" />
+      <circle id="shape_circle" x="120" y="520" radius="35" color="#FF0000FF" />
+      <circle id="shape_filled_circle" x="200" y="520" radius="30" checked="true" color="#00FF00FF" />
+      <polygon id="shape_triangle" x="300" y="520" radius="30" sides="3" color="#FFFF00FF" />
+      <polygon id="shape_square" x="380" y="520" radius="30" sides="4" color="#00FFFFFF" />
+    </panel>
+  </panel>
+
+  <panel id="game_ui" x="0" y="0" w="1" h="1" visible="false" color="#00000000">
+    <label id="game_title" x="472" y="150" text="GAME" size="48" color="#00FF00FF" />
+    <panel id="game_shapes" x="600" y="450" w="200" h="150" color="#28283CFF">
+      <label id="game_shapes_title" x="665" y="460" text="Circles" size="20" color="#FFFFFFFF" />
+      <circle id="game_circle" x="680" y="520" radius="35" color="#FF0000FF" />
+      <circle id="game_filled_circle" x="750" y="520" radius="30" checked="true" color="#00FF00FF" />
+    </panel>
+  </panel>
+
+  <panel id="settings_ui" x="0" y="0" w="1" h="1" visible="false" color="#00000000">
+    <label id="settings_title" x="442" y="150" text="SETTINGS" size="48" color="#FFA500FF" />
+    <panel id="settings_panel" x="312" y="220" w="400" h="250" color="#28283CFF">
+      <label id="settings_header" x="460" y="230" text="Configuration" size="20" color="#FFFFFFFF" />
+      <label id="settings_audio" x="432" y="280" text="Audio Volume: 80%" size="20" color="#FFFFFFFF" />
+      <progress id="settings_volume" x="362" y="310" w="240" h="20" value="0.8" color="#00FF00FF" color2="#808080FF" />
+      <label id="settings_graphics" x="452" y="360" text="Graphics: High" size="20" color="#FFFFFFFF" />
+      <label id="settings_fullscreen" x="442" y="400" text="Fullscreen: Off" size="20" color="#FFFFFFFF" />
+    </panel>
+  </panel>
+
+  <panel id="video_ui" x="0" y="0" w="1" h="1" visible="false" color="#00000000">
+    <label id="video_title" x="472" y="50" text="VIDEO" size="48" color="#FF00FFFF" />
+    <panel id="video_panel" x="50" y="618" w="300" h="100" color="#28283CFF">
+      <label id="video_info_title" x="150" y="628" text="Video Info" size="20" color="#FFFFFFFF" />
+      <label id="video_file" x="70" y="653" text="File: XINGJILOGE.mp4" size="16" color="#FFFFFFFF" />
+      <label id="video_size" x="70" y="678" text="Size: unavailable" size="16" color="#FFFFFFFF" />
+      <label id="video_status" x="70" y="703" text="Status: Playing" size="16" color="#00FF00FF" />
+    </panel>
+    <label id="video_missing" x="432" y="384" text="Video not loaded!" size="24" color="#FF0000FF" visible="false" />
+  </panel>
+
+  <panel id="input_ui" x="0" y="0" w="1" h="1" visible="false" color="#00000000">
+	<image id="input_logo" x="10" y="10" w="128" h="128" src="../image/XINGJI.png" />
+    <rect id="input_footer" x="0" y="550" w="1024" h="218" color="#1E1E28FF" />
+    <label id="input_title" x="392" y="560" text="Input &amp; Camera Demo" size="28" color="#FFFF00FF" />
+    <label id="input_help" x="212" y="600" text="WASD/Arrows: Move  |  SHIFT: Sprint  |  Z/X: Zoom  |  1-4: Switch scenes" size="18" color="#00FFFFFF" />
+    <label id="mouse_position" x="332" y="630" text="Screen: (0, 0) World: (0, 0)" size="16" color="#FFFFFFFF" />
+    <label id="camera_view" x="392" y="655" text="View: (0, 0, 0, 0)" size="16" color="#808080FF" />
+    <label id="input_collision" x="392" y="680" text="Collisions: 0 | Zoom: 1.0" size="18" color="#00FF00FF" />
+  </panel>
+</ui>

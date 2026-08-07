@@ -89,6 +89,8 @@ set(BRIDGEENGINE_UI_SOURCES
 	src/scene.c
 	src/level.c
 	src/xml_loader.c
+	 src/ui.c
+	 src/ui_xml.c
 )
 set(BRIDGEENGINE_MEDIA_SOURCES
 	src/audio.c
@@ -315,6 +317,19 @@ if(BRIDGEENGINE_BUILD_TESTS)
 	add_test(NAME bridgeengine.scene_level_xml
 		COMMAND bridgeengine_scene_level_xml_test "${CMAKE_CURRENT_BINARY_DIR}"
 	)
+
+	add_executable(bridgeengine_ui_xml_test
+		tests/ui_xml_test.c
+		src/ui.c
+		src/ui_xml.c
+		src/button.c
+	)
+	target_include_directories(bridgeengine_ui_xml_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.ui_xml COMMAND bridgeengine_ui_xml_test "${CMAKE_CURRENT_BINARY_DIR}")
 
 	add_executable(bridgeengine_texture_test
 		tests/texture_test.c
@@ -584,6 +599,8 @@ if(BRIDGEENGINE_BUILD_XJ380)
 		src/scene.c
 		src/level.c
 		src/xml_loader.c
+		src/ui.c
+		src/ui_xml.c
 		src/audio.c
 		src/video/video_stub.c
 	)
