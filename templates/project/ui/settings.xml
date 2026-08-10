@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui>
+  <panel id="settings" x="0" y="0" w="1024" h="768" color="#00000000">
+    <label id="settings_title" x="432" y="150" text="SETTINGS" size="48" color="#FFA500FF" />
+    <panel id="settings_panel" x="312" y="220" w="400" h="250" color="#28283CFF">
+      <label id="settings_header" x="442" y="230" text="Configuration" size="20" color="#FFFFFFFF" />
+      <label id="settings_audio" x="402" y="280" text="Audio Volume: 80%" size="20" color="#FFFFFFFF" />
+      <progress id="settings_volume" x="362" y="310" w="240" h="20" value="0.8"
+                color="#00FF00FF" color2="#808080FF" />
+      <label id="settings_graphics" x="422" y="360" text="Graphics: High" size="20" color="#FFFFFFFF" />
+    </panel>
+  </panel>
+</ui>

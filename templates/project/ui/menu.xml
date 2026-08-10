@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui>
+  <panel id="menu" x="0" y="0" w="1024" h="768" color="#00000000">
+    <label id="menu_title" x="432" y="150" text="MENU" size="48" color="#FFFF00FF" />
+    <label id="menu_welcome" x="332" y="220" text="Welcome to __PROJECT_NAME__!" size="24" color="#FFFFFFFF" />
+    <button id="start_button" x="432" y="400" w="160" h="50" text="Start"
+            text_size="22" normal="#3C823CFF" hover="#50A050FF" click="#286428FF"
+            text_color="#FFFFFFFF" />
+    <label id="menu_hint" x="292" y="480" text="1 - Menu  2 - Game  3 - Settings" size="18" color="#00FFFFFF" />
+  </panel>
+</ui>

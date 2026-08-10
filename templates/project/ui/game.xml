@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui>
+  <panel id="game" x="0" y="0" w="1024" h="768" color="#00000000">
+    <label id="game_title" x="472" y="150" text="GAME" size="48" color="#00FF00FF" />
+    <label id="game_hint" x="352" y="220" text="Design your game scene here." size="24" color="#FFFFFFFF" />
+    <button id="back_button" x="432" y="400" w="160" h="50" text="Back"
+            text_size="22" normal="#3C3C82FF" hover="#5050A0FF" click="#282864FF"
+            text_color="#FFFFFFFF" />
+  </panel>
+</ui>

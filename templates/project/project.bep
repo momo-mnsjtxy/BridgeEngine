@@ -1,0 +1,8 @@
+# BridgeEngine Project
+name = __PROJECT_NAME__
+engine = __ENGINE_DIR__
+
+[documents]
+ui/menu.xml
+ui/game.xml
+ui/settings.xml
