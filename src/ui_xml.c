@@ -357,6 +357,8 @@ static int apply_attributes(bapi_ui_component_t component, const ui_tag_t *tag,
 	component->local_rect = component->rect;
 	const char *src		  = get_attr(tag, "src");
 	if (src) {
+		component->src_raw = ui_strdup(src);
+		if (!component->src_raw) return -1;
 		char *path = join_path(base_dir, src);
 		if (!path) return -1;
 		component->src = ui_strdup(path);
@@ -500,4 +502,226 @@ bapi_ui_t bapi_ui_load_from_xml(const char *filepath)
 	free(base_dir);
 	free(xml);
 	return ui;
+}
+
+static const char *ui_tag_name(bapi_ui_component_type_t type)
+{
+	switch (type) {
+	case BAPI_UI_COMPONENT_RECT:
+		return "rect";
+	case BAPI_UI_COMPONENT_LABEL:
+		return "label";
+	case BAPI_UI_COMPONENT_BUTTON:
+		return "button";
+	case BAPI_UI_COMPONENT_IMAGE:
+		return "image";
+	case BAPI_UI_COMPONENT_LINE:
+		return "line";
+	case BAPI_UI_COMPONENT_CIRCLE:
+		return "circle";
+	case BAPI_UI_COMPONENT_POLYGON:
+		return "polygon";
+	case BAPI_UI_COMPONENT_BORDER:
+		return "border";
+	case BAPI_UI_COMPONENT_PROGRESS:
+		return "progress";
+	case BAPI_UI_COMPONENT_SEPARATOR:
+		return "separator";
+	case BAPI_UI_COMPONENT_PANEL:
+		return "panel";
+	case BAPI_UI_COMPONENT_CONTAINER:
+		return "container";
+	case BAPI_UI_COMPONENT_ROW:
+		return "row";
+	case BAPI_UI_COMPONENT_COLUMN:
+		return "column";
+	case BAPI_UI_COMPONENT_GRID:
+		return "grid";
+	case BAPI_UI_COMPONENT_CHECKBOX:
+		return "checkbox";
+	case BAPI_UI_COMPONENT_RADIO:
+		return "radio";
+	case BAPI_UI_COMPONENT_TOGGLE:
+		return "toggle";
+	case BAPI_UI_COMPONENT_SLIDER:
+		return "slider";
+	case BAPI_UI_COMPONENT_INPUT:
+		return "input";
+	case BAPI_UI_COMPONENT_SELECT:
+		return "select";
+	case BAPI_UI_COMPONENT_LIST:
+		return "list";
+	case BAPI_UI_COMPONENT_SCROLL:
+		return "scroll";
+	case BAPI_UI_COMPONENT_TAB:
+		return "tab";
+	case BAPI_UI_COMPONENT_VIDEO:
+		return "video";
+	case BAPI_UI_COMPONENT_CANVAS:
+		return "canvas";
+	case BAPI_UI_COMPONENT_NINE_PATCH:
+		return "nine_patch";
+	case BAPI_UI_COMPONENT_ANIMATION:
+		return "animation";
+	case BAPI_UI_COMPONENT_TOOLTIP:
+		return "tooltip";
+	case BAPI_UI_COMPONENT_MODAL:
+		return "modal";
+	case BAPI_UI_COMPONENT_POPUP:
+		return "popup";
+	default:
+		return NULL;
+	}
+}
+
+typedef struct {
+	FILE *file;
+	int	  indent;
+	int	  failed;
+} ui_writer_t;
+
+static int color_equals(bapi_color_t a, bapi_color_t b)
+{
+	return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+}
+
+static void ui_write_indent(ui_writer_t *w)
+{
+	for (int i = 0; i < w->indent; i++) fputs("  ", w->file);
+}
+
+static void ui_write_attr_encoded(ui_writer_t *w, const char *name, const char *value)
+{
+	fprintf(w->file, " %s=\"", name);
+	for (const char *cursor = value; *cursor; cursor++) {
+		switch (*cursor) {
+		case '&':
+			fputs("&amp;", w->file);
+			break;
+		case '<':
+			fputs("&lt;", w->file);
+			break;
+		case '>':
+			fputs("&gt;", w->file);
+			break;
+		case '"':
+			fputs("&quot;", w->file);
+			break;
+		case '\'':
+			fputs("&apos;", w->file);
+			break;
+		default:
+			fputc(*cursor, w->file);
+			break;
+		}
+	}
+	fputs("\"", w->file);
+}
+
+static void ui_write_float_attr(ui_writer_t *w, const char *name, float value)
+{
+	if (value == (float)(int)value) {
+		fprintf(w->file, " %s=\"%d\"", name, (int)value);
+		return;
+	}
+	char buffer[64];
+	snprintf(buffer, sizeof(buffer), "%.6f", (double)value);
+	size_t len = strlen(buffer);
+	while (len > 0 && buffer[len - 1] == '0') len--;
+	if (len > 0 && buffer[len - 1] == '.') len--;
+	buffer[len] = '\0';
+	fprintf(w->file, " %s=\"%s\"", name, buffer);
+}
+
+static void ui_write_int_attr(ui_writer_t *w, const char *name, int value)
+{
+	fprintf(w->file, " %s=\"%d\"", name, value);
+}
+
+static void ui_write_color_attr(ui_writer_t *w, const char *name, bapi_color_t color)
+{
+	fprintf(w->file, " %s=\"#%02X%02X%02X%02X\"", name, color.r, color.g, color.b, color.a);
+}
+
+static void ui_write_component(ui_writer_t *w, bapi_ui_component_t component)
+{
+	const char *tag = ui_tag_name(component->type);
+	if (!tag || !component->id) {
+		w->failed = 1;
+		return;
+	}
+	ui_write_indent(w);
+	fprintf(w->file, "<%s", tag);
+	fprintf(w->file, " id=\"%s\"", component->id);
+	ui_write_float_attr(w, "x", component->local_rect.x);
+	ui_write_float_attr(w, "y", component->local_rect.y);
+	ui_write_float_attr(w, "w", component->local_rect.w);
+	ui_write_float_attr(w, "h", component->local_rect.h);
+	if (!component->visible) fputs(" visible=\"false\"", w->file);
+	if (!component->enabled) fputs(" enabled=\"false\"", w->file);
+	if (component->relative_position) fputs(" relative=\"true\"", w->file);
+	if (component->text && component->text[0]) ui_write_attr_encoded(w, "text", component->text);
+	if (component->text_size != 18.0f)
+		ui_write_float_attr(w, component->type == BAPI_UI_COMPONENT_BUTTON ? "text_size" : "size",
+							component->text_size);
+	if (component->radius != 0.0f) ui_write_float_attr(w, "radius", component->radius);
+	if (component->sides != 0) ui_write_int_attr(w, "sides", component->sides);
+	if (component->columns != 0) ui_write_int_attr(w, "columns", component->columns);
+	if (component->rows != 0) ui_write_int_attr(w, "rows", component->rows);
+	if (component->item_count != 0) ui_write_int_attr(w, "items", component->item_count);
+	if (component->max_text_length != 256)
+		ui_write_int_attr(w, "max_length", component->max_text_length);
+	if (component->checked) fputs(" checked=\"true\"", w->file);
+	if (component->type == BAPI_UI_COMPONENT_PROGRESS ||
+		component->type == BAPI_UI_COMPONENT_SLIDER) {
+		ui_write_float_attr(w, "value", component->value);
+		if (component->min_value != 0.0f) ui_write_float_attr(w, "min", component->min_value);
+		if (component->max_value != 1.0f) ui_write_float_attr(w, "max", component->max_value);
+		if (component->step != 1.0f) ui_write_float_attr(w, "step", component->step);
+	}
+	if (component->type == BAPI_UI_COMPONENT_ROW || component->type == BAPI_UI_COMPONENT_COLUMN ||
+		component->type == BAPI_UI_COMPONENT_GRID) {
+		if (component->step != 1.0f) ui_write_float_attr(w, "step", component->step);
+	}
+	if (component->type == BAPI_UI_COMPONENT_BUTTON) {
+		if (!color_equals(component->color, bapi_color(255, 255, 255, 255)))
+			ui_write_color_attr(w, "normal", component->color);
+		if (!color_equals(component->color2, bapi_color(0, 0, 0, 255)))
+			ui_write_color_attr(w, "hover", component->color2);
+		if (!color_equals(component->color3, bapi_color(0, 0, 0, 255)))
+			ui_write_color_attr(w, "click", component->color3);
+		if (!color_equals(component->text_color, bapi_color(255, 255, 255, 255)))
+			ui_write_color_attr(w, "text_color", component->text_color);
+	} else {
+		if (!color_equals(component->color, bapi_color(255, 255, 255, 255)))
+			ui_write_color_attr(w, "color", component->color);
+		if (!color_equals(component->color2, bapi_color(0, 0, 0, 255)))
+			ui_write_color_attr(w, "color2", component->color2);
+	}
+	if (component->src_raw && component->src_raw[0])
+		ui_write_attr_encoded(w, "src", component->src_raw);
+	if (component->child_count > 0) {
+		fputs(">\n", w->file);
+		w->indent++;
+		for (int i = 0; i < component->child_count; i++)
+			ui_write_component(w, component->children[i]);
+		w->indent--;
+		ui_write_indent(w);
+		fprintf(w->file, "</%s>\n", tag);
+	} else {
+		fputs(" />\n", w->file);
+	}
+}
+
+int bapi_ui_save_to_xml(bapi_ui_t ui, const char *filepath)
+{
+	if (!ui || !filepath) return -1;
+	FILE *file = fopen(filepath, "wb");
+	if (!file) return -1;
+	ui_writer_t w = {file, 0, 0};
+	fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ui>\n", file);
+	for (int i = 0; i < ui->root_count; i++) ui_write_component(&w, ui->roots[i]);
+	fputs("</ui>\n", file);
+	fclose(file);
+	return w.failed ? -1 : 0;
 }

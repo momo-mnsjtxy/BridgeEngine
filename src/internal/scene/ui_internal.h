@@ -7,6 +7,7 @@ struct bapi_ui_component_internal {
 	char							   *id;
 	char							   *text;
 	char							   *src;
+	char							   *src_raw;
 	bapi_rect_t							rect;
 	bapi_rect_t							local_rect;
 	bapi_color_t						color;

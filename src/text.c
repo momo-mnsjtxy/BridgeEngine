@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_FONTS		  8
+#define MAX_FONTS		  64
 #define FONT_PATH_RUNTIME "assets/text/font.ttf"
 #define FONT_PATH_SOURCE  "examples/assets/text/font.ttf"
 #define FONT_PATH_LEGACY  "text/font.ttf"
@@ -15,9 +15,19 @@ typedef struct {
 	plat_font_t font;
 	float		size;
 	int			in_use;
+	int			last_used;
 } cached_font_t;
 
 static cached_font_t g_font_cache[MAX_FONTS] = {0};
+static int			g_font_clock = 0;
+
+// Quantize to integer pixels so zooming reuses cached fonts instead of
+// creating a new font for every fractional size.
+static float font_quantize_size(float size)
+{
+	float q = (float)(int)(size + 0.5f);
+	return q < 1.0f ? 1.0f : q;
+}
 
 static plat_font_t get_or_load_font(float size)
 {
@@ -26,28 +36,50 @@ static plat_font_t get_or_load_font(float size)
 
 	const plat_interface_t *plat = plat_get();
 
+	size = font_quantize_size(size);
+
 	for (int i = 0; i < MAX_FONTS; i++) {
 		if (g_font_cache[i].in_use && g_font_cache[i].size == size) {
+			g_font_cache[i].last_used = ++g_font_clock;
 			return g_font_cache[i].font;
 		}
 	}
 
+	// prefer a free slot; otherwise reuse the least-recently-used one so the
+	// cache can never silently starve rendering (which made all text vanish
+	// when zooming changed every requested size at once)
+	int slot = -1;
 	for (int i = 0; i < MAX_FONTS; i++) {
 		if (!g_font_cache[i].in_use) {
-			const char *font_paths[] = {FONT_PATH_RUNTIME, FONT_PATH_SOURCE, FONT_PATH_LEGACY};
-			for (size_t path_index = 0; path_index < sizeof(font_paths) / sizeof(font_paths[0]);
-				 path_index++) {
-				g_font_cache[i].font = plat->text.open_font(font_paths[path_index], size);
-				if (g_font_cache[i].font) {
-					g_font_cache[i].size   = size;
-					g_font_cache[i].in_use = 1;
-					return g_font_cache[i].font;
-				}
-			}
-			return NULL;
+			slot = i;
+			break;
+		}
+	}
+	if (slot < 0) {
+		int oldest = 0;
+		for (int i = 1; i < MAX_FONTS; i++) {
+			if (g_font_cache[i].last_used < g_font_cache[oldest].last_used) oldest = i;
+		}
+		slot = oldest;
+		if (g_font_cache[slot].font) {
+			plat->text.close_font(g_font_cache[slot].font);
+			g_font_cache[slot].font = NULL;
 		}
 	}
 
+	const char *font_paths[] = {FONT_PATH_RUNTIME, FONT_PATH_SOURCE, FONT_PATH_LEGACY};
+	for (size_t path_index = 0; path_index < sizeof(font_paths) / sizeof(font_paths[0]);
+		 path_index++) {
+		g_font_cache[slot].font = plat->text.open_font(font_paths[path_index], size);
+		if (g_font_cache[slot].font) {
+			g_font_cache[slot].size		= size;
+			g_font_cache[slot].in_use	= 1;
+			g_font_cache[slot].last_used = ++g_font_clock;
+			return g_font_cache[slot].font;
+		}
+	}
+
+	g_font_cache[slot].in_use = 0;
 	return NULL;
 }
 

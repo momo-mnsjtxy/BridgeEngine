@@ -308,6 +308,12 @@ static void xj380_destroy_window(plat_window_t window)
 	}
 }
 
+static void *xj380_get_native_window(plat_window_t window)
+{
+	(void)window;
+	return NULL;
+}
+
 static plat_renderer_t xj380_create_renderer(plat_window_t window)
 {
 	if (!window) return NULL;
@@ -329,6 +335,12 @@ static void xj380_destroy_renderer(plat_renderer_t renderer)
 	if (renderer) {
 		free(renderer);
 	}
+}
+
+static void *xj380_get_native_renderer(plat_renderer_t renderer)
+{
+	(void)renderer;
+	return NULL;
 }
 
 static void xj380_set_render_draw_color(plat_renderer_t renderer, uint8_t r, uint8_t g, uint8_t b,
@@ -1012,6 +1024,7 @@ static const plat_interface_t xj380_interface = {
 			.destroy_window	 = xj380_destroy_window,
 			.poll_event		 = xj380_poll_event,
 			.get_mouse_state = xj380_get_mouse_state,
+			.get_native_window = xj380_get_native_window,
 		},
 	.renderer =
 		{
@@ -1026,6 +1039,7 @@ static const plat_interface_t xj380_interface = {
 			.render_rect				= xj380_render_rect,
 			.render_fill_rect			= xj380_render_fill_rect,
 			.render_texture				= xj380_render_texture,
+			.get_native_renderer		= xj380_get_native_renderer,
 		},
 	.texture =
 		{

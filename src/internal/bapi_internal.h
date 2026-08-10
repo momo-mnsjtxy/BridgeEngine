@@ -11,6 +11,8 @@ extern "C" {
 
 plat_renderer_t bapi_internal_get_renderer(void);
 uint32_t		bapi_get_ticks(void);
+void		   *bapi_internal_get_native_window(void);
+void		   *bapi_internal_get_native_renderer(void);
 
 #ifdef __cplusplus
 }

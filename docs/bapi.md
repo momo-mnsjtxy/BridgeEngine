@@ -104,8 +104,14 @@ int bapi_event_is_mouse_motion(const bapi_event_t *event);
 
 事件类型 `bapi_event_type_t`：`BAPI_EVENT_QUIT`、`BAPI_EVENT_KEY_DOWN`、`BAPI_EVENT_KEY_UP`、
 `BAPI_EVENT_MOUSE_BUTTON_DOWN`、`BAPI_EVENT_MOUSE_BUTTON_UP`、`BAPI_EVENT_MOUSE_MOTION`、
-`BAPI_EVENT_UNKNOWN`。按键码 0-127 为 ASCII 码，128 起为 `KEY_*` 特殊键（ESC、F1-F12 等）。
-`BAPI_BUTTON_LEFT` 为左键（值为 1）。
+`BAPI_EVENT_MOUSE_WHEEL`、`BAPI_EVENT_TEXT_INPUT`、`BAPI_EVENT_UNKNOWN`。按键码 0-127 为
+ASCII 码，128 起为 `KEY_*` 特殊键（ESC、F1-F12 等）。`BAPI_BUTTON_LEFT` 为左键（值为 1）。
+
+`BAPI_EVENT_MOUSE_WHEEL` 携带 `data.wheel { x, y, delta }`：`x`/`y` 为滚轮事件发生时的光标
+坐标（float），`delta` 为滚动量，正值向上（远离用户）、负值向下。`BAPI_EVENT_TEXT_INPUT`
+携带 `data.text { text[32] }`：UTF-8 编码的输入文本，最大 31 字节加 NUL。这两个事件不经过
+SDL 平台的按键/鼠标映射，由 UI 系统直接消费，桌面端由编辑器预览面板或输入层构造，XJ380
+上不可用。
 
 ### 渲染控制
 
@@ -617,6 +623,22 @@ int bapi_ui_component_set_scroll_offset(bapi_ui_component_t component, float off
 组件优先命中；鼠标必须在同一组件内按下和释放才算点击。`bapi_ui_was_clicked(ui, id)` 返回
 1；查询非按钮或未知 `id` 返回 0。点击状态在下一次 `bapi_ui_update` 时更新。
 
+`bapi_ui_update` 还接受以下输入事件：
+
+- `BAPI_EVENT_MOUSE_WHEEL`：以事件坐标从最上层组件向父级查找最近的 `scroll` 容器，更新其
+  `scroll_offset`；单步滚动量为容器高度 10%，结果夹在 0 与 `内容高度 - 视口高度` 之间。坐标
+  不在任何组件上时不滚动。
+- `BAPI_EVENT_TEXT_INPUT`：把 UTF-8 文本追加到当前焦点 `input` 的文本末尾，按
+  `max_length` 截断；无焦点 `input` 时忽略。
+- `BAPI_EVENT_KEY_DOWN`：`TAB` 移动焦点到下一个可聚焦组件，`ESC` 清除焦点，`ENTER` 激活
+  当前焦点组件，`BACKSPACE` 删除 `input` 末尾一个字节，其余键按 ASCII 追加到焦点 `input`。
+- 其余鼠标事件：`MOTION` 刷新悬停，`BUTTON_DOWN` 记录按下，`BUTTON_UP` 在同组件内按下并
+  释放时激活（切换 checkbox/radio/toggle 的 `checked`、按指针位置设置 slider 的 `value`、
+  循环 `select` 的 `selected_index`）。
+
+`hovered`/`pressed` 是瞬时状态：每次 `bapi_ui_update` 先清空再按事件重建，`pressed` 只在
+`BUTTON_UP` 时清除。渲染函数不会修改这些状态。
+
 文件格式约束：
 
 - 根节点必须是 `<ui>`。根节点可以为空：`<ui></ui>` 或 `<ui />`。
@@ -677,7 +699,7 @@ int bapi_ui_component_set_scroll_offset(bapi_ui_component_t component, float off
 也可以是相对路径；相对路径基于 XML 文件所在目录，而不是进程当前工作目录。图片加载失败时，
 整个 `bapi_ui_load_from_xml` 返回 `NULL`。
 
-`progress` 和 `slider` 使用 `value`、`min`、`max` 属性。内部绘制会把数值归一化到 `[0, 1]`，
+`progress` 和 `slider` 使用 `value`、`min`、`max`、`step` 属性（`step` 仅在非 1 时写出）。内部绘制会把数值归一化到 `[0, 1]`，
 因此 `min="20" max="100" value="50"` 会绘制为 37.5% 的进度。`slider` 点击轨道后更新
 `value`，`bapi_ui_component_set_value` 也会自动限制到 `[min, max]`。
 
@@ -747,6 +769,133 @@ bapi_ui_destroy(menu_ui);
   <image id="logo" x="260" y="24" w="128" h="128" src="assets/logo.png" />
 </ui>
 ```
+
+### UI 持久化与编辑
+
+```c
+int bapi_ui_save_to_xml(bapi_ui_t ui, const char *filepath);
+```
+把组件树序列化回 loader 能读回的 XML 格式。返回 0 成功；`ui` 或 `filepath` 为 `NULL`、文件写入
+失败或遇到无法映射的组件类型时返回 -1。
+
+- 坐标输出组件的 `local_rect`（布局前的原始坐标）而不是布局后的 `rect`，因此 row/column/grid
+  等布局容器的子组件位置保存后可精确还原。
+- `text` 与 `src` 中的 `&`、`<`、`>`、`"`、`'` 会转义为实体；`src` 保存的是 XML 中的原始相对路径，
+  不是加载时解析出的绝对路径。
+- 属性按「非默认值才写出」：颜色省略等价于默认值、`text_size` 省略等价于 18、`visible`/`enabled`
+  省略等价于 `true`、`value`/`min`/`max` 只对 `progress`/`slider` 写出、`step` 只对
+  `row`/`column`/`grid` 写出。
+- 有子组件的节点写成成对标签，无子组件的节点写成自闭合标签，两种形式 loader 都接受。
+
+```c
+void bapi_ui_render_ex(bapi_ui_t ui, float offset_x, float offset_y, float scale);
+```
+带平移和缩放的渲染：所有组件按 `(rect.x + offset_x) * scale` 计算屏幕坐标，宽高和字号同步缩放。
+`scale` 非正时按 1 处理。`ui` 为 `NULL` 时 no-op。`bapi_ui_render` 等价于以
+`(0, 0, 1)` 调用。
+
+### UI 组件树编辑
+
+```c
+bapi_ui_component_t bapi_ui_component_create(bapi_ui_component_type_t type, const char *id);
+void bapi_ui_component_destroy(bapi_ui_component_t component);
+bapi_ui_component_t bapi_ui_component_clone(bapi_ui_component_t source);
+int bapi_ui_component_add_child(bapi_ui_component_t parent, bapi_ui_component_t child);
+int bapi_ui_component_insert_child(bapi_ui_component_t parent, bapi_ui_component_t child, int index);
+int bapi_ui_component_remove(bapi_ui_component_t component);
+int bapi_ui_add_root(bapi_ui_t ui, bapi_ui_component_t component);
+int bapi_ui_insert_root(bapi_ui_t ui, bapi_ui_component_t component, int index);
+int bapi_ui_remove_root(bapi_ui_t ui, bapi_ui_component_t component);
+```
+运行时编辑组件树，供工具或脚本用。`create` 创建孤立组件，新组件默认可见、启用、白色、
+`text_size` 18。`add_child` 把 `child` 挂到 `parent` 末尾并设置父指针；`insert_child` 把已脱离
+树的 `child` 插入到 `parent` 的第 `index` 个位置（`index` 等于当前子数量即追加），插入前会
+拒绝「已挂载的 child」和「会形成环」（把 `parent` 挂进自己的子树）两种非法操作；`remove` 把组件
+从父节点的子列表中摘除并清空父指针（不释放内存）。`add_root` / `insert_root` / `remove_root`
+管理 UI 根列表；`insert_root` 与 `insert_child` 语义一致，把已脱离树的组件插入到根列表第
+`index` 个位置，与 `add_root` 共享同一套重复 `id` 检查。
+`destroy` 递归释放组件及其子树；只应对已从树中摘除的组件调用。
+
+- 返回值：`create` 返回新组件或 `NULL`（`id` 空或分配失败）；`add_child` / `insert_child` /
+  `remove` / `add_root` / `insert_root` / `remove_root` 返回 0 成功，-1 参数非法、未找到、child
+  仍挂载或形成环。
+- `clone` 深拷贝 `source` 整棵子树并返回新的孤立组件：`id`、文本、颜色、几何、数值属性以及所有
+  子节点全部复制，资源型组件（`image`/`video`/`nine_patch`）按 `src` 重新加载独立的纹理/视频，
+  不与源共享。克隆体未挂载，调用方负责分配唯一 `id` 后挂载，用完必须 `destroy`。
+- `add_root` 与加载器共享同一套重复 `id` 检查：与现有根冲突时返回 -1。
+- 修改布局容器（`row`/`column`/`grid`）的子组件后调用 `bapi_ui_layout` 重排位置。
+
+```c
+bapi_ui_component_t bapi_ui_component_get_parent(bapi_ui_component_t component);
+int					bapi_ui_component_get_child_count(bapi_ui_component_t component);
+bapi_ui_component_t bapi_ui_component_get_child(bapi_ui_component_t component, int index);
+int					bapi_ui_get_root_count(bapi_ui_t ui);
+bapi_ui_component_t bapi_ui_get_root(bapi_ui_t ui, int index);
+const char		   *bapi_ui_component_get_id(bapi_ui_component_t component);
+bapi_ui_t			bapi_ui_create(void);
+```
+树遍历。`get_parent` / `get_child` / `get_root` 在 `component`（或 `ui`）为 `NULL` 或越界时返回
+`NULL`；`get_child_count` 和 `get_root_count` 在入参为 `NULL` 时返回 0。`get_id` 返回组件 `id`
+的借用指针，组件无 `id` 时为 `NULL`。`create` 分配一个空 UI 对象（根列表为空），供以编程方式
+从零搭建组件树后保存；与 `bapi_ui_load_from_xml` 返回的 UI 一样，用完必须 `bapi_ui_destroy`。
+
+### UI 组件属性编辑
+
+```c
+void bapi_ui_component_set_rect(bapi_ui_component_t component, bapi_rect_t rect);
+int	 bapi_ui_component_set_id(bapi_ui_component_t component, const char *id);
+int	 bapi_ui_component_set_color(bapi_ui_component_t component, bapi_ui_color_role_t role,
+							   bapi_color_t color);
+int	 bapi_ui_component_get_color(bapi_ui_component_t component, bapi_ui_color_role_t role,
+							   bapi_color_t *out);
+void bapi_ui_component_set_text_size(bapi_ui_component_t component, float size);
+float bapi_ui_component_get_text_size(bapi_ui_component_t component);
+int	 bapi_ui_component_set_src(bapi_ui_component_t component, const char *src);
+const char *bapi_ui_component_get_src(bapi_ui_component_t component);
+```
+
+`set_rect` 同时更新组件的 `local_rect`（持久化坐标）和 `rect`（当前绘制坐标）。`set_id` 校验非空，
+返回 0 成功、-1 失败；不检查全局唯一性（由保存后的重新加载或 `add_root` 检查）。颜色角色
+`bapi_ui_color_role_t`：`BAPI_UI_COLOR_NORMAL`（`color`/`normal`）、`BAPI_UI_COLOR_HOVER`
+（`color2`/`hover`）、`BAPI_UI_COLOR_CLICK`（`color3`/`click`）、`BAPI_UI_COLOR_TEXT`
+（`text_color`）。`set_color` / `get_color` 对非法角色或 `NULL` 参数返回 -1。`set_text_size`
+对 `NULL` no-op，`get_text_size` 对 `NULL` 返回 0。
+
+`set_src` 动态替换资源型组件（`image` / `video` / `nine_patch` / `animation`）的资源：先加载新
+资源，成功后才释放旧资源并更新内部 `src`，因此失败时组件保持原资源不变；非资源型组件或加载失败
+返回 -1，成功返回 0。`get_src` 返回保存时的原始 `src` 字符串（可能是相对路径）的借用指针，
+组件无 `src` 时为 `NULL`。
+
+数值型组件属性（`slider` / `progress` 的范围与步进，及网格、圆形、多边形几何参数）：
+
+```c
+float bapi_ui_component_get_min_value(bapi_ui_component_t component);
+int	 bapi_ui_component_set_min_value(bapi_ui_component_t component, float value);
+float bapi_ui_component_get_max_value(bapi_ui_component_t component);
+int	 bapi_ui_component_set_max_value(bapi_ui_component_t component, float value);
+float bapi_ui_component_get_step(bapi_ui_component_t component);
+int	 bapi_ui_component_set_step(bapi_ui_component_t component, float step);
+int	 bapi_ui_component_get_columns(bapi_ui_component_t component);
+int	 bapi_ui_component_set_columns(bapi_ui_component_t component, int columns);
+float bapi_ui_component_get_radius(bapi_ui_component_t component);
+int	 bapi_ui_component_set_radius(bapi_ui_component_t component, float radius);
+int	 bapi_ui_component_get_sides(bapi_ui_component_t component);
+int	 bapi_ui_component_set_sides(bapi_ui_component_t component, int sides);
+int	 bapi_ui_component_is_checked(bapi_ui_component_t component);
+int	 bapi_ui_component_set_checked(bapi_ui_component_t component, int checked);
+int	 bapi_ui_component_get_relative(bapi_ui_component_t component);
+int	 bapi_ui_component_set_relative(bapi_ui_component_t component, int relative);
+```
+
+- `set_min_value` / `set_max_value` 调整范围后会把当前 `value` 重新 clamp 到新范围内（越界则就地
+  修正到边界），返回 0 成功、-1 参数非法。
+- `set_columns` 拒绝负数，`set_radius` 拒绝负数，`set_sides` 拒绝负数（0 会被接受，渲染时按
+  `sides < 3` 不绘制）；`set_checked` / `set_relative` 按「非零即真」存储。全部 setter 对
+  `NULL` 返回 -1，getter 对 `NULL` 返回 0。
+- 默认值：`min_value` 0、`max_value` 1、`step` 1（与 XML 加载器的默认一致）；`checked`、
+  `columns`、`sides`、`relative` 默认 0。
+- 这些属性与 XML 双向持久化一致：`slider` / `progress` 的 `step`（非 1 时）随 `min` / `max` /
+  `value` 一起写出；`columns`、`radius`、`sides`、`checked`、`relative` 按非默认值写出。
 
 ## 数学、日志与版本
 

@@ -334,6 +334,16 @@ static plat_texture_t sdl3_create_texture_from_surface(plat_renderer_t renderer,
 	return t;
 }
 
+static void *sdl3_get_native_window(plat_window_t window)
+{
+	return window ? window->window : NULL;
+}
+
+static void *sdl3_get_native_renderer(plat_renderer_t renderer)
+{
+	return renderer ? renderer->renderer : NULL;
+}
+
 static plat_texture_t sdl3_create_texture(plat_renderer_t renderer, plat_pixel_format_t format,
 										  plat_texture_access_t access, int width, int height)
 {
@@ -819,6 +829,7 @@ static const plat_interface_t sdl3_interface = {
 			.destroy_window	 = sdl3_destroy_window,
 			.poll_event		 = sdl3_poll_event,
 			.get_mouse_state = sdl3_get_mouse_state,
+			.get_native_window = sdl3_get_native_window,
 		},
 	.renderer =
 		{
@@ -833,6 +844,7 @@ static const plat_interface_t sdl3_interface = {
 			.render_rect				= sdl3_render_rect,
 			.render_fill_rect			= sdl3_render_fill_rect,
 			.render_texture				= sdl3_render_texture,
+			.get_native_renderer		= sdl3_get_native_renderer,
 		},
 	.texture =
 		{

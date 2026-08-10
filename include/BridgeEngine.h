@@ -46,6 +46,8 @@ typedef enum {
 	BAPI_EVENT_MOUSE_MOTION		 = 4,
 	BAPI_EVENT_KEY_UP			 = 5,
 	BAPI_EVENT_UNKNOWN			 = 6,
+	BAPI_EVENT_MOUSE_WHEEL		 = 7,
+	BAPI_EVENT_TEXT_INPUT		 = 8,
 } bapi_event_type_t;
 
 typedef struct {
@@ -63,6 +65,14 @@ typedef struct {
 			float x;
 			float y;
 		} motion;
+		struct {
+			float x;
+			float y;
+			float delta;
+		} wheel;
+		struct {
+			char text[32];
+		} text;
 	} data;
 } bapi_event_t;
 
@@ -197,6 +207,13 @@ typedef enum {
 	BAPI_UI_COMPONENT_MODAL,
 	BAPI_UI_COMPONENT_POPUP,
 } bapi_ui_component_type_t;
+
+typedef enum {
+	BAPI_UI_COLOR_NORMAL = 0,
+	BAPI_UI_COLOR_HOVER,
+	BAPI_UI_COLOR_CLICK,
+	BAPI_UI_COLOR_TEXT,
+} bapi_ui_color_role_t;
 
 typedef struct {
 	bapi_log_level_t min_level;
@@ -405,6 +422,7 @@ bapi_level_manager_t bapi_level_manager_load_from_xml(const char *filepath);
 int bapi_scene_manager_save_to_xml(bapi_scene_manager_t manager, const char *filepath);
 int bapi_level_manager_save_to_xml(bapi_level_manager_t manager, const char *filepath);
 
+bapi_ui_t				 bapi_ui_create(void);
 bapi_ui_t				 bapi_ui_load_from_xml(const char *filepath);
 void					 bapi_ui_destroy(bapi_ui_t ui);
 void					 bapi_ui_update(bapi_ui_t ui, const bapi_event_t *event);
@@ -420,6 +438,8 @@ int			bapi_ui_component_is_enabled(bapi_ui_component_t component);
 void		bapi_ui_component_set_enabled(bapi_ui_component_t component, int enabled);
 const char *bapi_ui_component_get_text(bapi_ui_component_t component);
 int			bapi_ui_component_set_text(bapi_ui_component_t component, const char *text);
+const char *bapi_ui_component_get_src(bapi_ui_component_t component);
+int			bapi_ui_component_set_src(bapi_ui_component_t component, const char *src);
 float		bapi_ui_component_get_value(bapi_ui_component_t component);
 int			bapi_ui_component_set_value(bapi_ui_component_t component, float value);
 int			bapi_ui_component_is_checked(bapi_ui_component_t component);
@@ -428,6 +448,51 @@ int			bapi_ui_component_get_selected_index(bapi_ui_component_t component);
 int			bapi_ui_component_set_selected_index(bapi_ui_component_t component, int index);
 float		bapi_ui_component_get_scroll_offset(bapi_ui_component_t component);
 int			bapi_ui_component_set_scroll_offset(bapi_ui_component_t component, float offset);
+int			bapi_ui_save_to_xml(bapi_ui_t ui, const char *filepath);
+void		bapi_ui_render_ex(bapi_ui_t ui, float offset_x, float offset_y, float scale);
+
+bapi_ui_component_t bapi_ui_component_create(bapi_ui_component_type_t type, const char *id);
+void				bapi_ui_component_destroy(bapi_ui_component_t component);
+bapi_ui_component_t bapi_ui_component_clone(bapi_ui_component_t source);
+int bapi_ui_component_add_child(bapi_ui_component_t parent, bapi_ui_component_t child);
+int bapi_ui_component_insert_child(bapi_ui_component_t parent, bapi_ui_component_t child, int index);
+int bapi_ui_component_remove(bapi_ui_component_t component);
+int bapi_ui_add_root(bapi_ui_t ui, bapi_ui_component_t component);
+int bapi_ui_remove_root(bapi_ui_t ui, bapi_ui_component_t component);
+int bapi_ui_insert_root(bapi_ui_t ui, bapi_ui_component_t component, int index);
+
+bapi_ui_component_t bapi_ui_component_get_parent(bapi_ui_component_t component);
+int					bapi_ui_component_get_child_count(bapi_ui_component_t component);
+bapi_ui_component_t bapi_ui_component_get_child(bapi_ui_component_t component, int index);
+
+int					 bapi_ui_get_root_count(bapi_ui_t ui);
+bapi_ui_component_t	 bapi_ui_get_root(bapi_ui_t ui, int index);
+
+void bapi_ui_component_set_rect(bapi_ui_component_t component, bapi_rect_t rect);
+const char *bapi_ui_component_get_id(bapi_ui_component_t component);
+int	 bapi_ui_component_set_id(bapi_ui_component_t component, const char *id);
+int	 bapi_ui_component_set_color(bapi_ui_component_t component, bapi_ui_color_role_t role,
+							   bapi_color_t color);
+int	 bapi_ui_component_get_color(bapi_ui_component_t component, bapi_ui_color_role_t role,
+							   bapi_color_t *out);
+void bapi_ui_component_set_text_size(bapi_ui_component_t component, float size);
+float bapi_ui_component_get_text_size(bapi_ui_component_t component);
+
+float bapi_ui_component_get_min_value(bapi_ui_component_t component);
+int	 bapi_ui_component_set_min_value(bapi_ui_component_t component, float value);
+float bapi_ui_component_get_max_value(bapi_ui_component_t component);
+int	 bapi_ui_component_set_max_value(bapi_ui_component_t component, float value);
+float bapi_ui_component_get_step(bapi_ui_component_t component);
+int	 bapi_ui_component_set_step(bapi_ui_component_t component, float step);
+int	 bapi_ui_component_set_checked(bapi_ui_component_t component, int checked);
+int	 bapi_ui_component_get_columns(bapi_ui_component_t component);
+int	 bapi_ui_component_set_columns(bapi_ui_component_t component, int columns);
+float bapi_ui_component_get_radius(bapi_ui_component_t component);
+int	 bapi_ui_component_set_radius(bapi_ui_component_t component, float radius);
+int	 bapi_ui_component_get_sides(bapi_ui_component_t component);
+int	 bapi_ui_component_set_sides(bapi_ui_component_t component, int sides);
+int	 bapi_ui_component_get_relative(bapi_ui_component_t component);
+int	 bapi_ui_component_set_relative(bapi_ui_component_t component, int relative);
 
 const char *bridgeengine_get_version(void);
 int			bridgeengine_get_version_number(void);

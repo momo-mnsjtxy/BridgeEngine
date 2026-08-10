@@ -23,6 +23,7 @@ typedef struct {
 	void (*destroy_window)(plat_window_t window);
 	int (*poll_event)(plat_event_t *event);
 	void (*get_mouse_state)(float *x, float *y);
+	void *(*get_native_window)(plat_window_t window);
 } plat_window_api_t;
 
 typedef struct {
@@ -39,6 +40,7 @@ typedef struct {
 	void (*render_fill_rect)(plat_renderer_t renderer, float x, float y, float w, float h);
 	void (*render_texture)(plat_renderer_t renderer, plat_texture_t texture, float x, float y,
 						   float w, float h);
+	void *(*get_native_renderer)(plat_renderer_t renderer);
 } plat_renderer_api_t;
 
 typedef struct {

@@ -80,6 +80,26 @@ plat_renderer_t bapi_internal_get_renderer(void)
 	return bapi_runtime_renderer();
 }
 
+void *bapi_internal_get_native_window(void)
+{
+	const plat_interface_t *plat	 = plat_get();
+	plat_window_t			window	 = bapi_runtime_window();
+	if (!bapi_runtime_is_initialized() || plat == NULL || window == NULL ||
+		plat->window.get_native_window == NULL)
+		return NULL;
+	return plat->window.get_native_window(window);
+}
+
+void *bapi_internal_get_native_renderer(void)
+{
+	const plat_interface_t *plat	  = plat_get();
+	plat_renderer_t			renderer = bapi_runtime_renderer();
+	if (!bapi_runtime_is_initialized() || plat == NULL || renderer == NULL ||
+		plat->renderer.get_native_renderer == NULL)
+		return NULL;
+	return plat->renderer.get_native_renderer(renderer);
+}
+
 bapi_window_t bapi_engine_get_window(void)
 {
 	return bapi_runtime_is_initialized() ? (bapi_window_t)bapi_runtime_window() : NULL;
