@@ -34,8 +34,10 @@ option(BRIDGEENGINE_BUILD_STATIC "Build the static BridgeEngine library" ON)
 option(BRIDGEENGINE_BUILD_EXAMPLES "Build BridgeEngine example executables" ON)
 option(BRIDGEENGINE_BUILD_XJ380 "Enable XJ380 custom build targets" ON)
 option(BRIDGEENGINE_BUILD_TESTS "Build BridgeEngine regression tests" ON)
+option(BRIDGEENGINE_BUILD_EDITOR "Build the BridgeEngine UI editor (desktop, ImGui)" ON)
 option(BRIDGEENGINE_FETCH_SDL "Fetch SDL3 dependencies when they are unavailable" ON)
 option(BRIDGEENGINE_FETCH_XJ380 "Fetch the XJ380 SDK when XJ380_SDK is unset" ON)
+option(BRIDGEENGINE_FETCH_IMGUI "Fetch Dear ImGui (docking) sources when building the editor" ON)
 option(BRIDGEENGINE_ENABLE_ASAN "Enable AddressSanitizer for supported regression tests" OFF)
 
 set(BRIDGEENGINE_FETCHCONTENT_TIMESTAMP_ARGS)
@@ -331,6 +333,71 @@ if(BRIDGEENGINE_BUILD_TESTS)
 	)
 	add_test(NAME bridgeengine.ui_xml COMMAND bridgeengine_ui_xml_test "${CMAKE_CURRENT_BINARY_DIR}")
 
+	add_executable(bridgeengine_ui_save_test
+		tests/ui_save_test.c
+		src/ui.c
+		src/ui_xml.c
+		src/button.c
+	)
+	target_include_directories(bridgeengine_ui_save_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.ui_save COMMAND bridgeengine_ui_save_test "${CMAKE_CURRENT_BINARY_DIR}")
+
+	add_executable(bridgeengine_ui_attributes_test
+		tests/ui_attributes_test.c
+		src/ui.c
+		src/ui_xml.c
+		src/button.c
+	)
+	target_include_directories(bridgeengine_ui_attributes_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.ui_attributes COMMAND bridgeengine_ui_attributes_test "${CMAKE_CURRENT_BINARY_DIR}")
+
+	add_executable(bridgeengine_ui_tree_edit_test
+		tests/ui_tree_edit_test.c
+		src/ui.c
+		src/ui_xml.c
+		src/button.c
+	)
+	target_include_directories(bridgeengine_ui_tree_edit_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.ui_tree_edit COMMAND bridgeengine_ui_tree_edit_test "${CMAKE_CURRENT_BINARY_DIR}")
+
+	add_executable(bridgeengine_ui_src_test
+		tests/ui_src_test.c
+		src/ui.c
+		src/ui_xml.c
+		src/button.c
+	)
+	target_include_directories(bridgeengine_ui_src_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.ui_src COMMAND bridgeengine_ui_src_test "${CMAKE_CURRENT_BINARY_DIR}")
+
+	add_executable(bridgeengine_ui_interaction_test
+		tests/ui_interaction_test.c
+		src/ui.c
+		src/ui_xml.c
+		src/button.c
+	)
+	target_include_directories(bridgeengine_ui_interaction_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.ui_interaction COMMAND bridgeengine_ui_interaction_test "${CMAKE_CURRENT_BINARY_DIR}")
+
 	add_executable(bridgeengine_texture_test
 		tests/texture_test.c
 		src/texture.c
@@ -555,6 +622,98 @@ if(BRIDGEENGINE_BUILD_EXAMPLES)
 	add_executable(bridgeengine_log_example examples/log/log_test.c)
 	target_link_libraries(bridgeengine_log_example PRIVATE ${BRIDGEENGINE_EXAMPLE_LINK_TARGET})
 	bridgeengine_copy_runtime_assets(bridgeengine_log_example)
+endif()
+
+if(BRIDGEENGINE_BUILD_EDITOR AND TARGET bridgeengine_static)
+	if(NOT TARGET imgui::imgui)
+		set(BRIDGEENGINE_IMGUI_SOURCE_DIR "" CACHE PATH "Path to a local Dear ImGui (docking branch) source tree")
+		if(BRIDGEENGINE_IMGUI_SOURCE_DIR)
+			if(NOT EXISTS "${BRIDGEENGINE_IMGUI_SOURCE_DIR}/imgui.cpp")
+				message(FATAL_ERROR
+					"BRIDGEENGINE_IMGUI_SOURCE_DIR is set but does not contain imgui.cpp: "
+					"${BRIDGEENGINE_IMGUI_SOURCE_DIR}")
+			endif()
+			set(imgui_SOURCE_DIR "${BRIDGEENGINE_IMGUI_SOURCE_DIR}")
+		else()
+			if(NOT BRIDGEENGINE_FETCH_IMGUI)
+				message(FATAL_ERROR
+					"ImGui was not found. Configure with -DBRIDGEENGINE_FETCH_IMGUI=ON to fetch the docking branch.")
+			endif()
+			FetchContent_Declare(imgui
+				GIT_REPOSITORY https://github.com/ocornut/imgui.git
+				GIT_TAG v1.92.8-docking
+				GIT_SHALLOW TRUE
+				${BRIDGEENGINE_FETCHCONTENT_TIMESTAMP_ARGS}
+			)
+			FetchContent_GetProperties(imgui)
+			if(NOT imgui_POPULATED)
+				FetchContent_Populate(imgui)
+			endif()
+		endif()
+		# imgui's own CMakeLists calls find_package(SDL3 CONFIG REQUIRED), which breaks
+		# when SDL3 comes from FetchContent. Build the sources directly instead.
+		add_library(imgui STATIC
+			"${imgui_SOURCE_DIR}/imgui.cpp"
+			"${imgui_SOURCE_DIR}/imgui_draw.cpp"
+			"${imgui_SOURCE_DIR}/imgui_tables.cpp"
+			"${imgui_SOURCE_DIR}/imgui_widgets.cpp"
+			"${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp"
+			"${imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer3.cpp"
+		)
+		add_library(imgui::imgui ALIAS imgui)
+		target_include_directories(imgui PUBLIC
+			"${imgui_SOURCE_DIR}"
+			"${imgui_SOURCE_DIR}/backends"
+		)
+		target_link_libraries(imgui PRIVATE "${BRIDGEENGINE_SDL3_TARGET}")
+		target_compile_features(imgui PUBLIC cxx_std_11)
+	endif()
+
+	set(BRIDGEENGINE_EDITOR_SOURCES
+		editor/main.cpp
+		editor/document_model.cpp
+		editor/commands.cpp
+		editor/platform_dialogs.cpp
+		editor/project_templates.cpp
+		editor/project_file.cpp
+		editor/i18n.cpp
+		editor/build_run.cpp
+		editor/panels/menu.cpp
+		editor/panels/documents.cpp
+		editor/panels/toolbar.cpp
+		editor/panels/viewport.cpp
+		editor/panels/palette.cpp
+		editor/panels/preview.cpp
+		editor/panels/tree.cpp
+		editor/panels/properties.cpp
+		editor/panels/scenes.cpp
+		editor/panels/welcome.cpp
+		editor/panels/build_output.cpp
+	)
+	add_executable(bridgeengine_editor ${BRIDGEENGINE_EDITOR_SOURCES})
+	target_include_directories(bridgeengine_editor PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+	)
+	target_compile_definitions(bridgeengine_editor PRIVATE BAPI_LOG_ENABLED)
+	string(REPLACE "\\" "/" BRIDGEENGINE_SOURCE_DIR_FORWARD "${CMAKE_CURRENT_SOURCE_DIR}")
+	target_compile_definitions(bridgeengine_editor PRIVATE
+		BRIDGEENGINE_SOURCE_DIR="${BRIDGEENGINE_SOURCE_DIR_FORWARD}"
+	)
+	target_compile_features(bridgeengine_editor PRIVATE cxx_std_14)
+	if(MSVC)
+		target_compile_options(bridgeengine_editor PRIVATE /utf-8 /W4)
+	endif()
+	if(WIN32)
+		target_link_libraries(bridgeengine_editor PRIVATE comdlg32 shell32)
+	endif()
+	target_link_libraries(bridgeengine_editor PRIVATE
+		bridgeengine_static
+		imgui::imgui
+		${BRIDGEENGINE_PLATFORM_LIBS}
+	)
+	bridgeengine_copy_runtime_assets(bridgeengine_editor)
 endif()
 
 if(BRIDGEENGINE_BUILD_XJ380)

@@ -36,7 +36,76 @@ XJ380 尚未实现字体文件加载；若 XAPI 要求非 UTF-8 编码，应在�
 
 ## 事件
 
-BAPI 自己定义事件枚举和事件结构。平台适配器产生 `plat_event_t`，`src/core/init.c` 将其转换为 `bapi_event_t` 后再由 `bapi_poll_event()` 返回。
+BAPI 自己定义事件枚举和事件结构。平台适配器产生 `plat_event_t`，`src/core/init.c` 将其转换为 `bapi_event_t` 后再由 `bapi_poll_event()` 返回。M4 新增的两个事件 `BAPI_EVENT_MOUSE_WHEEL` 与 `BAPI_EVENT_TEXT_INPUT` **不经过平台适配层**：SDL 后端不映射滚轮、桌面没有独立文本输入队列，它们由编辑器 Preview 面板等消费方直接构造并喂给 `bapi_ui_update`。XJ380 无这些输入来源。
+
+## UI 编辑器（桌面 only）
+
+`editor/` 是一个 C++/Dear ImGui 的独立桌面工具，构建目标为 `bridgeengine_editor`（`BRIDGEENGINE_BUILD_EDITOR`）。它**不**链接引擎运行时作为编辑器框架，而是直接使用公开 BAPI 和 `src/internal/bapi_internal.h` 的 native handle getter 拿到 SDL window/renderer。
+
+- `editor/editor.h`：`EditorState`（全局：snap/grid、viewport 尺寸、多文档容器、recent files、pending 确认状态）和 `Command` 命令基类。每个打开的场景是一个 `Document` 结构（ui、文件路径、dirty、选择、视图相机、undo/redo 栈、拖拽/缩放/框选中间态、owner 注册表、剪贴板）。
+- `editor/document_model.cpp`：新建/加载/保存文档（走 `bapi_ui_load_from_xml`/`save_to_xml`）、命中测试、视图坐标换算，以及多文档管理（`EditorActivateDocument` / `EditorCloseDocument`）。
+- `editor/commands.cpp`：Add/Remove/SetRect/SetText/SetId/SetColor/SetTextSize/Reparent/Clone/Reorder/MultiRemove/MultiRect/SetSrc 命令 + undo/redo 栈。组件所有权由 `ComponentOwner`（shared_ptr）管理，Add 与 Remove 命令通过 `state.owner_registry` 共享同一 owner，保证 detached 组件恰好释放一次。`MultiRemoveCmd` / `MultiRectCmd` 把一次删除或多拖合并成单步 undo。
+- `editor/panels/`：menu、documents（标签页 + 未保存确认弹窗）、toolbar、viewport、preview、palette、tree、properties 面板。
+
+编辑器支持多选（Ctrl+点击 切换、Delete 批量删除、视口批量拖动、框选）、层级树的拖拽重挂载（拖到容器或
+空白区域成为子节点/根节点）、复制/粘贴与 Ctrl+D 原地复制（底层是 `bapi_ui_component_clone` 深拷贝 +
+唯一 id 去重）、对齐（以主选择为参照，左/中/右/上/中/下）、z 序调整（Edit > Order 或 Home/End/PgUp/PgDn，
+底层是 `bapi_ui_insert_root` / `bapi_ui_component_insert_child` 的 index 语义）。视口带文档坐标网格
+（工具栏 Grid 开关），拖动可吸附到网格（Snap 开关，`grid_size = 20`）。视口支持 8 向缩放手柄、
+方向键 nudge（Shift=10px、Snap 开启时按 grid）。palette 中的类型可直接拖入视口创建组件。
+
+Properties 面板对资源型组件提供 `src` 的 Browse（原生对话框 → `SetSrcCmd`，失败回滚且不记录 undo）；
+多选时显示批量区，可对全部选中组件一次性应用文本大小、可见/启用和颜色；Id 输入带实时唯一性校验，
+与同级组件重名时标红并拦截提交（`EditorIdIsUnique` 校验兄弟作用域）。
+- `editor/platform_dialogs.cpp`：原生文件对话框（Windows，`GetOpenFileNameA`/`GetSaveFileNameA`）。为保证 `fopen`/`bapi_ui_load_from_xml` 两侧一致，走 ANSI 变体，因此**只保证 ASCII 路径**；非 ASCII 字符可能被系统代码页转码损坏，视为已知限制。非 Windows 构建返回空串（视为取消）。
+
+多文档：每个 `Document` 是独立的 UI 树、undo/redo 栈与视图相机。活动文档的字段直接保存在
+`EditorState` 上（既有代码无感），切换标签时通过 `swap_doc_state` 把字段换入/换出，活动文档与
+`EditorState` 之间用同一套 swap 保持单份活数据。关闭/替换文档时 `Document` 析构先释放 detached
+组件的 owner，再释放整棵 UI 树。`Document` 的 `ui` 只在停靠（非活动）时非空，避免与 `EditorState`
+的活动 `ui` 重复释放。File > New/Open/Close/Close All/Quit 与关窗都会在 `dirty` 时弹
+「Unsaved Changes」确认（保存/丢弃/取消）；最近文件列表（8 条，MRU）持久化到工作目录
+`recent_files.txt`。
+
+视口渲染：引擎的 `bapi_ui_render_ex()` 先画进一张 SDL offscreen 纹理（`SDL_TEXTUREACCESS_TARGET`），再经 `ImGui::Image()` 显示，使引擎内容与 ImGui 窗口的 z 排序和裁剪由 ImGui 处理。视图相机映射为 `screen = (doc + offset) * scale`。
+
+实时预览（M4）：`editor/panels/preview.cpp` 与视口同款 offscreen 纹理渲染活动文档，默认自动
+适配窗口尺寸，Ctrl+滚轮缩放（`EditorState::preview_scale`：0=自适应，>0=手动缩放）。鼠标/滚轮/
+按键/IME 文本经 ImGui IO 转换后直接构造 `bapi_event_t` 喂给 `bapi_ui_update`，预览与编辑共用
+同一棵 UI 树（WYSIWYG）：点按钮、拖滑块、滚 SCROLL、敲 INPUT 都即时生效，预览点击不改变
+编辑器选择。脏策略——只有会改持久化状态（checkbox/slider/select 的 `checked`/`value`/
+`selected_index`、INPUT 文本、激活）的交互才调用 `EditorMarkDirty`；hover/focus 与滚动
+（`scroll_offset` 不入 XML）不标脏。每次进入预览窗口都发一次 MOUSE_MOTION 刷新悬停、离开时发
+远点清除，`pressed` 在预览外释放时补发 BUTTON_UP 兜底。
+
+项目体系（M6）：编辑器围绕 `.bep` 项目文件组织工程。`templates/project/` 是自包含的项目模板
+（CMakeLists.txt、main.c、`assets/text/font.ttf`、`ui/` 示例、`project.bep`），
+`editor/project_templates.cpp` 的 `EditorCreateProject` 把模板复制到目标目录并替换
+`__PROJECT_NAME__`/`__EXEC_NAME__`/`__ENGINE_DIR__` 占位符，再把 `project.bep` 重命名为
+`<name>.bep`（通过 `out_bep_path` 输出实际生成路径）。`editor/project_file.cpp` 解析 `.bep`
+（INI 风格，`name`/`engine`/`[documents]` 段，文档为相对路径），`EditorOpenProject` 加载项目
+文档并写入最近项目列表。`editor/panels/welcome.cpp` 是启动欢迎页（最近项目/最近文件/新建项目/
+打开文档），主窗口启动时默认显示；命令行传 XML 路径时直接进设计界面。新建项目向导
+`editor/panels/menu.cpp` 的三步表单（名称→位置→引擎源码）默认预填当前工作目录与
+`BRIDGEENGINE_SOURCE_DIR`。
+
+i18n（M6）：`editor/i18n.cpp` 是轻量多语言层，`L(key)` 以英文源串为 key 查表。翻译表在运行时从
+`editor/locale/zh_CN.txt`/`en.txt` 加载（`key = value` 行格式，`#` 注释），未命中回退英文 key，
+因此局部翻译不会损坏界面。语言偏好持久化在 `editor_settings.txt`，View > 语言 切换时会同时触发
+一次默认布局重置。编辑器按 `/utf-8` 编译，启动时通过 `GetGlyphRangesChineseSimplifiedCommon`
+加载中文字形，保证简体中文渲染。
+
+构建/运行（M7）：`editor/build_run.cpp` 在后台线程跑 cmake（未配置时先 `-S`/`-B` configure；
+检测到 `VCPKG_ROOT` 则带 vcpkg toolchain），用 `_popen` 捕获输出追加到 `state.build_log`
+（`build_log_mutex` 保护）。`EditorBuildOutputPanel`（`editor/panels/build_output.cpp`）把日志
+渲染在底部 Build Output dock，可清除。Project 菜单的 Build（Ctrl+Shift+B）/ Run（Ctrl+F5）先
+构建再从 build 目录递归定位 `<项目名>.exe`，以 exe 所在目录为工作目录启动，保证模板里
+`assets/` 相对路径可用。模板项目 `add_subdirectory` 引擎时关闭
+`BRIDGEENGINE_BUILD_SHARED/EXAMPLES/TESTS/EDITOR/XJ380`，只产出运行所需的最小静态库。
+
+ImGui 来自 docking 分支源码。构建时优先使用 `BRIDGEENGINE_IMGUI_SOURCE_DIR` 指定的本地源码树（例如 vcpkg 的 buildtrees 拷贝）；否则通过 FetchContent 从 GitHub 拉取 `v1.92.8-docking`。imgui 自带的 CMakeLists 会 `find_package(SDL3 CONFIG REQUIRED)`，与 FetchContent 的 SDL3 冲突，因此只编译其核心源文件和 SDL3/SDL-renderer 后端，直接构建静态库。
+
+默认布局：编辑器内置一套默认 docking 布局（顶部 Documents 标签条，左侧 Hierarchy/Palette 上下排列，中央 Viewport，右侧 Properties/Preview 上下排列）。布局版本号以自定义 `[EditorLayout]` settings 段持久化在 `imgui.ini` 里：当保存的版本早于当前版本（首次启动或升级后）自动应用一次默认布局并把版本号升到当前值，之后尊重用户自排的布局、绝不复写。`View > Reset Layout` 随时可手动恢复默认布局。
 
 ## 后续 2.5D
 
