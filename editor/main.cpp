@@ -1,6 +1,7 @@
 #include "editor.h"
 #include "i18n.h"
 #include "platform_dialogs.h"
+#include "project_file.h"
 
 static const char *kUiFileFilter = "UI Documents (*.xml)\0*.xml\0All Files (*.*)\0*.*\0";
 
@@ -247,6 +248,10 @@ int main(int argc, char *argv[])
 					EditorNewDocument(state);
 					state.show_welcome = false;
 				}
+			}
+			if (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_P) && !state.project_path.empty()) {
+				std::string error;
+				EditorSaveProject(state, error);
 			}
 		}
 		if (ImGui::IsKeyPressed(ImGuiKey_Delete) && !state.selection_list.empty())

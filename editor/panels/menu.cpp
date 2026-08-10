@@ -2,6 +2,7 @@
 #include "../build_run.h"
 #include "../i18n.h"
 #include "../platform_dialogs.h"
+#include "../project_file.h"
 #include "../project_templates.h"
 
 #ifndef BRIDGEENGINE_SOURCE_DIR
@@ -94,6 +95,14 @@ static void file_menu(EditorState &state)
 	if (ImGui::MenuItem(L("Save As..."), "Ctrl+Shift+S")) {
 		std::string path = EditorSaveFileDialog(kUiFileFilter, state.filepath.c_str());
 		if (!path.empty()) EditorSaveFile(state, path.c_str());
+	}
+	ImGui::Separator();
+	if (ImGui::MenuItem(L("Save Project"), "Ctrl+Shift+P", false, !state.project_path.empty())) {
+		std::string error;
+		if (!EditorSaveProject(state, error)) {
+			std::lock_guard<std::mutex> lock(state.build_log_mutex);
+			state.build_log += "save project: " + error + "\n";
+		}
 	}
 	ImGui::Separator();
 	if (ImGui::MenuItem(L("Close"), "Ctrl+W", false, state.active_doc >= 0)) {

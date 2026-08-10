@@ -156,6 +156,7 @@ struct EditorState {
 	std::vector<std::string> recent_files;
 	std::vector<std::string> recent_projects;
 	std::string project_path;
+	std::string project_engine;
 	bool show_welcome = true;
 
 	// preview panel camera: <= 0 = auto-fit to window, > 0 = manual zoom

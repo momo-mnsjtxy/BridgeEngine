@@ -123,6 +123,62 @@ void EditorSaveRecentProjects(EditorState &state)
 	std::fclose(file);
 }
 
+// Convert an absolute document path into a path relative to the project root
+// directory (the folder holding the .bep file). Falls back to the absolute
+// path when the document is not under the project root.
+static std::string relative_to_root(const std::string &root, const std::string &path)
+{
+	std::string root_dir = root;
+	if (!root_dir.empty() && root_dir.back() != '\\' && root_dir.back() != '/') root_dir += "\\";
+	size_t pos = path.find(root_dir);
+	if (pos == 0) {
+		std::string rel = path.substr(root_dir.size());
+		// Normalize backslashes to forward slashes in the stored path.
+		for (char &c : rel)
+			if (c == '\\') c = '/';
+		return rel;
+	}
+	return path;
+}
+
+bool EditorSaveProject(EditorState &state, std::string &error_out)
+{
+	if (state.project_path.empty()) {
+		error_out = "No project is open.";
+		return false;
+	}
+	std::string root = parent_dir(state.project_path);
+	FILE *file		= std::fopen(state.project_path.c_str(), "wb");
+	if (!file) {
+		error_out = "Cannot write project file: " + state.project_path;
+		return false;
+	}
+
+	ProjectConfig config;
+	config.name = state.project_path;
+	{
+		size_t slash = config.name.find_last_of("\\/");
+		if (slash != std::string::npos) config.name = config.name.substr(slash + 1);
+		if (config.name.size() > 4 && config.name.compare(config.name.size() - 4, 4, ".bep") == 0)
+			config.name.resize(config.name.size() - 4);
+	}
+
+	for (int i = 0; i < (int)state.documents.size(); i++) {
+		const std::string &doc_path = EditorDocumentPath(state, i);
+		if (!doc_path.empty()) config.documents.push_back(relative_to_root(root, doc_path));
+	}
+	if (config.documents.empty()) config.documents.push_back("ui/game.xml");
+
+	std::fprintf(file, "; BridgeEngine project file - written by BridgeEngine Edit\n");
+	std::fprintf(file, "name = %s\n", config.name.c_str());
+	if (!state.project_engine.empty())
+		std::fprintf(file, "engine = %s\n", state.project_engine.c_str());
+	std::fprintf(file, "\n[documents]\n");
+	for (const std::string &doc : config.documents) std::fprintf(file, "%s\n", doc.c_str());
+	std::fclose(file);
+	return true;
+}
+
 bool EditorOpenProject(EditorState &state, const char *path, std::string &error_out)
 {
 	if (!path || !path[0]) {
@@ -162,6 +218,7 @@ bool EditorOpenProject(EditorState &state, const char *path, std::string &error_
 	}
 
 	state.project_path = path;
+	state.project_engine = config.engine;
 	state.show_welcome = false;
 	EditorPushRecentProject(state, path);
 	return true;
