@@ -557,6 +557,60 @@ private:
 	float				new_value_;
 };
 
+class SetSelectedIndexCmd : public Command {
+public:
+	SetSelectedIndexCmd(bapi_ui_component_t comp, int old_value, int new_value)
+		: comp_(comp), old_value_(old_value), new_value_(new_value)
+	{
+	}
+
+	void Execute(EditorState &state) override
+	{
+		(void)state;
+		bapi_ui_component_set_selected_index(comp_, new_value_);
+	}
+
+	void Undo(EditorState &state) override
+	{
+		(void)state;
+		bapi_ui_component_set_selected_index(comp_, old_value_);
+	}
+
+	const char *Name() const override { return "Change Selected Index"; }
+
+private:
+	bapi_ui_component_t comp_;
+	int					old_value_;
+	int					new_value_;
+};
+
+class SetScrollOffsetCmd : public Command {
+public:
+	SetScrollOffsetCmd(bapi_ui_component_t comp, float old_value, float new_value)
+		: comp_(comp), old_value_(old_value), new_value_(new_value)
+	{
+	}
+
+	void Execute(EditorState &state) override
+	{
+		(void)state;
+		bapi_ui_component_set_scroll_offset(comp_, new_value_);
+	}
+
+	void Undo(EditorState &state) override
+	{
+		(void)state;
+		bapi_ui_component_set_scroll_offset(comp_, old_value_);
+	}
+
+	const char *Name() const override { return "Change Scroll Offset"; }
+
+private:
+	bapi_ui_component_t comp_;
+	float				old_value_;
+	float				new_value_;
+};
+
 class SetColumnsCmd : public Command {
 public:
 	SetColumnsCmd(bapi_ui_component_t comp, int old_value, int new_value)
@@ -848,6 +902,14 @@ void EditorDuplicateSelection(EditorState &state)
 	}
 }
 
+void EditorCutSelection(EditorState &state)
+{
+	if (state.selection_list.empty() || !state.ui) return;
+	std::vector<bapi_ui_component_t> sources = state.selection_list;
+	EditorCopySelection(state);
+	EditorRemoveComponents(state, sources);
+}
+
 void EditorCopySelection(EditorState &state)
 {
 	state.clipboard.clear();
@@ -1128,6 +1190,22 @@ void EditorSetComponentValue(EditorState &state, bapi_ui_component_t comp, float
 	float old_value = bapi_ui_component_get_value(comp);
 	if (old_value == new_value) return;
 	EditorPushCommand(state, std::make_unique<SetValueCmd>(comp, old_value, new_value));
+}
+
+void EditorSetComponentSelectedIndex(EditorState &state, bapi_ui_component_t comp, int new_value)
+{
+	if (!comp) return;
+	int old_value = bapi_ui_component_get_selected_index(comp);
+	if (old_value == new_value) return;
+	EditorPushCommand(state, std::make_unique<SetSelectedIndexCmd>(comp, old_value, new_value));
+}
+
+void EditorSetComponentScrollOffset(EditorState &state, bapi_ui_component_t comp, float new_value)
+{
+	if (!comp) return;
+	float old_value = bapi_ui_component_get_scroll_offset(comp);
+	if (old_value == new_value) return;
+	EditorPushCommand(state, std::make_unique<SetScrollOffsetCmd>(comp, old_value, new_value));
 }
 
 void EditorSetComponentColumns(EditorState &state, bapi_ui_component_t comp, int new_value)

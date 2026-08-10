@@ -407,6 +407,24 @@ void EditorClearSelection(EditorState &state)
 	state.selection = nullptr;
 }
 
+static void collect_all_nodes(bapi_ui_component_t node, std::vector<bapi_ui_component_t> &out)
+{
+	if (!node) return;
+	out.push_back(node);
+	for (int i = 0; i < bapi_ui_component_get_child_count(node); i++)
+		collect_all_nodes(bapi_ui_component_get_child(node, i), out);
+}
+
+void EditorSelectAll(EditorState &state)
+{
+	if (!state.ui) return;
+	reset_interaction(state);
+	state.selection_list.clear();
+	for (int i = 0; i < bapi_ui_get_root_count(state.ui); i++)
+		collect_all_nodes(bapi_ui_get_root(state.ui, i), state.selection_list);
+	state.selection = state.selection_list.empty() ? nullptr : state.selection_list.back();
+}
+
 bool EditorIsAncestor(bapi_ui_component_t node, bapi_ui_component_t candidate)
 {
 	for (bapi_ui_component_t cur = node; cur; cur = bapi_ui_component_get_parent(cur))

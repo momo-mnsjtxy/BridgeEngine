@@ -126,6 +126,26 @@ static void slider_value_editor(EditorState &state, bapi_ui_component_t comp)
 	}
 	float_field(state, comp, "Min", min, 0.5f, -100000.0f, max, NumericField::MinValue);
 	float_field(state, comp, "Max", max, 0.5f, min, 100000.0f, NumericField::MaxValue);
+	float step = bapi_ui_component_get_step(comp);
+	float_field(state, comp, "Step", step, 0.5f, 0.0001f, 100000.0f, NumericField::Step);
+}
+
+static void selected_index_editor(EditorState &state, bapi_ui_component_t comp)
+{
+	int selected = bapi_ui_component_get_selected_index(comp);
+	int next	 = selected;
+	if (ImGui::DragInt(L("Selected Index"), &next, 1, 0, 1024) && next != selected) {
+		EditorSetComponentSelectedIndex(state, comp, next);
+	}
+}
+
+static void scroll_offset_editor(EditorState &state, bapi_ui_component_t comp)
+{
+	float offset = bapi_ui_component_get_scroll_offset(comp);
+	float next	 = offset;
+	if (ImGui::DragFloat(L("Scroll Offset"), &next, 1.0f, 0.0f, 100000.0f) && next != offset) {
+		EditorSetComponentScrollOffset(state, comp, next);
+	}
 }
 
 static void type_specific_editors(EditorState &state, bapi_ui_component_t comp,
@@ -178,6 +198,14 @@ static void type_specific_editors(EditorState &state, bapi_ui_component_t comp,
 	case BAPI_UI_COMPONENT_NINE_PATCH:
 	case BAPI_UI_COMPONENT_ANIMATION:
 		src_editor(state, comp);
+		break;
+	case BAPI_UI_COMPONENT_SELECT:
+	case BAPI_UI_COMPONENT_LIST:
+	case BAPI_UI_COMPONENT_TAB:
+		selected_index_editor(state, comp);
+		break;
+	case BAPI_UI_COMPONENT_SCROLL:
+		scroll_offset_editor(state, comp);
 		break;
 	default:
 		break;

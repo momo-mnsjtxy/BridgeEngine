@@ -152,11 +152,15 @@ static void edit_menu(EditorState &state)
 	ImGui::Separator();
 	if (ImGui::MenuItem(L("Copy"), "Ctrl+C", false, !state.selection_list.empty()))
 		EditorCopySelection(state);
+	if (ImGui::MenuItem(L("Cut"), "Ctrl+X", false, !state.selection_list.empty()))
+		EditorCutSelection(state);
 	if (ImGui::MenuItem(L("Paste"), "Ctrl+V", false, !state.clipboard.empty()))
 		EditorPasteClipboard(state);
 	if (ImGui::MenuItem(L("Duplicate"), "Ctrl+D", false, !state.selection_list.empty()))
 		EditorDuplicateSelection(state);
 	ImGui::Separator();
+	if (ImGui::MenuItem(L("Select All"), "Ctrl+A", false, state.ui != nullptr))
+		EditorSelectAll(state);
 	if (ImGui::MenuItem(L("Delete Selection"), "Del", false, !state.selection_list.empty()))
 		EditorRemoveComponents(state, state.selection_list);
 	ImGui::Separator();

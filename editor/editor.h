@@ -255,6 +255,8 @@ void EditorSetComponentColor(EditorState &state, bapi_ui_component_t comp,
 							 bapi_ui_color_role_t role, bapi_color_t new_color);
 void EditorSetComponentTextSize(EditorState &state, bapi_ui_component_t comp, float new_size);
 void EditorSetComponentValue(EditorState &state, bapi_ui_component_t comp, float new_value);
+void EditorSetComponentSelectedIndex(EditorState &state, bapi_ui_component_t comp, int new_value);
+void EditorSetComponentScrollOffset(EditorState &state, bapi_ui_component_t comp, float new_value);
 void EditorSetComponentColumns(EditorState &state, bapi_ui_component_t comp, int new_value);
 void EditorSetComponentSides(EditorState &state, bapi_ui_component_t comp, int new_value);
 void EditorSetComponentMin(EditorState &state, bapi_ui_component_t comp, float new_value);
@@ -307,6 +309,8 @@ void EditorDuplicateSelection(EditorState &state);
 void EditorAlignSelection(EditorState &state, const char *align);
 void EditorCopySelection(EditorState &state);
 void EditorPasteClipboard(EditorState &state);
+void EditorCutSelection(EditorState &state);
+void EditorSelectAll(EditorState &state);
 
 // z-order
 enum class ReorderOp { Up, Down, Front, Back };

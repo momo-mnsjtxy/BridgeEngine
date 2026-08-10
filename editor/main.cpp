@@ -217,7 +217,9 @@ int main(int argc, char *argv[])
 			if (ImGui::IsKeyPressed(ImGuiKey_Z)) EditorUndo(state);
 			if (ImGui::IsKeyPressed(ImGuiKey_Y)) EditorRedo(state);
 			if (ImGui::IsKeyPressed(ImGuiKey_C)) EditorCopySelection(state);
+			if (ImGui::IsKeyPressed(ImGuiKey_X)) EditorCutSelection(state);
 			if (ImGui::IsKeyPressed(ImGuiKey_V)) EditorPasteClipboard(state);
+			if (ImGui::IsKeyPressed(ImGuiKey_A)) EditorSelectAll(state);
 			if (ImGui::IsKeyPressed(ImGuiKey_D)) EditorDuplicateSelection(state);
 			if (ImGui::IsKeyPressed(ImGuiKey_S)) {
 				if (state.filepath.empty()) {
