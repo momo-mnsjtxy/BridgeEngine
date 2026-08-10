@@ -20,6 +20,9 @@ endif()
 set(configure_command
   "${CMAKE_COMMAND}" -S "${SOURCE_DIR}/tests/package_consumer"
   -B "${prefix}/package-consumer" "-DCMAKE_PREFIX_PATH=${prefix}")
+if(DEFINED GENERATOR)
+  list(APPEND configure_command -G "${GENERATOR}")
+endif()
 if(DEFINED TOOLCHAIN_FILE)
   list(APPEND configure_command "-DCMAKE_TOOLCHAIN_FILE=${TOOLCHAIN_FILE}")
 endif()
