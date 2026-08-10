@@ -174,6 +174,14 @@ struct EditorState {
 	std::unique_ptr<std::thread> build_thread;
 	std::string build_exe_path;
 
+	// selected cmake build configuration (Debug / Release / RelWithDebInfo / MinSizeRel)
+	std::string build_config = "Debug";
+
+	// the currently running project process (WIN32). Opaque so editor.h stays
+	// free of <windows.h>: process handle as void*, id as uint64_t.
+	void *run_process_handle = nullptr;
+	uint64_t run_process_id = 0;
+
 	// New Project dialog state (File > New Project...)
 	bool new_project_open = false;
 	char new_project_name[128] = {};
@@ -326,6 +334,8 @@ bool EditorCanBuild(const EditorState &state);
 void EditorBuildProject(EditorState &state);
 bool EditorCanRun(const EditorState &state);
 void EditorRunProject(EditorState &state);
+bool EditorCanStopRun(const EditorState &state);
+void EditorStopRunProject(EditorState &state);
 void EditorBuildOutputPanel(EditorState &state);
 void EditorUpdateBuildThread(EditorState &state);
 

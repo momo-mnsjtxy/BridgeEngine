@@ -72,7 +72,7 @@ static std::string find_exe_recursive(const std::string &dir, const std::string 
 	return "";
 }
 
-static void build_worker(EditorState *state, std::string root)
+static void build_worker(EditorState *state, std::string root, std::string config)
 {
 	append_log(state, "=== configure ===\n");
 	std::string cache_path = root + "\\build\\CMakeCache.txt";
@@ -90,7 +90,7 @@ static void build_worker(EditorState *state, std::string root)
 	}
 
 	append_log(state, "=== build ===\n");
-	std::string command = "cmake --build \"" + root + "\\build\" --config Debug 2>&1";
+	std::string command = "cmake --build \"" + root + "\\build\" --config " + config + " 2>&1";
 	int build_exit		 = run_command(state, command.c_str());
 	state->build_succeeded = build_exit == 0;
 	state->build_running   = false;
@@ -108,7 +108,8 @@ void EditorBuildProject(EditorState &state)
 		std::lock_guard<std::mutex> lock(state.build_log_mutex);
 		state.build_log.clear();
 	}
-	state.build_thread = std::make_unique<std::thread>(build_worker, &state, root);
+	std::string config = state.build_config;
+	state.build_thread = std::make_unique<std::thread>(build_worker, &state, root, config);
 }
 
 void EditorUpdateBuildThread(EditorState &state)
@@ -160,10 +161,32 @@ void EditorRunProject(EditorState &state)
 	si.cb = sizeof(si);
 	if (CreateProcessA(NULL, const_cast<char *>(exe.c_str()), NULL, NULL, FALSE, 0, NULL,
 					   exe_dir.c_str(), &si, &pi)) {
+		// Keep the process handle so we can terminate it on demand; the thread
+		// handle is not needed. The handle is closed by EditorStopRunProject or
+		// on editor shutdown.
 		CloseHandle(pi.hThread);
-		CloseHandle(pi.hProcess);
-		append_log(&state, "run: started " + exe + "\n");
+		state.run_process_handle = pi.hProcess;
+		state.run_process_id	 = (uint64_t)pi.dwProcessId;
+		append_log(&state, "run: started " + exe + " (pid " + std::to_string(pi.dwProcessId) +
+						  ")\n");
 	} else {
 		append_log(&state, "run: failed to start " + exe + "\n");
 	}
+}
+
+bool EditorCanStopRun(const EditorState &state)
+{
+	return state.run_process_handle != nullptr;
+}
+
+void EditorStopRunProject(EditorState &state)
+{
+	if (!state.run_process_handle) return;
+	HANDLE process = (HANDLE)state.run_process_handle;
+	TerminateProcess(process, 1);
+	WaitForSingleObject(process, 5000);
+	CloseHandle(process);
+	state.run_process_handle = nullptr;
+	state.run_process_id	 = 0;
+	append_log(&state, "run: stopped\n");
 }

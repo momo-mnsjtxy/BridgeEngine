@@ -148,6 +148,18 @@ static void project_menu(EditorState &state)
 		EditorBuildProject(state);
 	if (ImGui::MenuItem(L("Run"), "Ctrl+F5", false, EditorCanRun(state)))
 		EditorRunProject(state);
+	if (ImGui::MenuItem(L("Stop"), "Shift+F5", false, EditorCanStopRun(state)))
+		EditorStopRunProject(state);
+	ImGui::Separator();
+	if (ImGui::BeginMenu(L("Build Configuration"))) {
+		static const char *kConfigs[] = {"Debug", "Release", "RelWithDebInfo", "MinSizeRel"};
+		for (const char *cfg : kConfigs) {
+			if (ImGui::MenuItem(cfg, nullptr, state.build_config == cfg)) {
+				state.build_config = cfg;
+			}
+		}
+		ImGui::EndMenu();
+	}
 
 	ImGui::EndMenu();
 }

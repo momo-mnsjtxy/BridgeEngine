@@ -254,6 +254,8 @@ int main(int argc, char *argv[])
 				EditorSaveProject(state, error);
 			}
 		}
+		if (io.KeyShift && !io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_F5))
+			EditorStopRunProject(state);
 		if (ImGui::IsKeyPressed(ImGuiKey_Delete) && !state.selection_list.empty())
 			EditorRemoveComponents(state, state.selection_list);
 
@@ -317,6 +319,9 @@ int main(int argc, char *argv[])
 	ImGui_ImplSDLRenderer3_Shutdown();
 	ImGui_ImplSDL3_Shutdown();
 	ImGui::DestroyContext();
+
+	// A project process may still be running; stop it so no orphan stays behind.
+	if (state.run_process_handle) EditorStopRunProject(state);
 
 	EditorSaveRecentFiles(state);
 	EditorSaveRecentProjects(state);

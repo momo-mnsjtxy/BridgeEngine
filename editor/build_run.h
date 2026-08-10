@@ -12,6 +12,10 @@ void EditorBuildProject(EditorState &state);
 bool EditorCanRun(const EditorState &state);
 void EditorRunProject(EditorState &state);
 
+// Terminate the running project process, if any.
+bool EditorCanStopRun(const EditorState &state);
+void EditorStopRunProject(EditorState &state);
+
 // Build log panel.
 void EditorBuildOutputPanel(EditorState &state);
 
