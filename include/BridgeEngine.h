@@ -23,6 +23,7 @@ typedef struct bapi_level_manager_internal *bapi_level_manager_t;
 typedef struct bapi_ui_internal			   *bapi_ui_t;
 typedef struct bapi_ui_component_internal  *bapi_ui_component_t;
 typedef struct bapi_file_internal		   *bapi_file_t;
+typedef struct bapi_pack_internal		   *bapi_pack_t;
 
 typedef struct {
 	uint8_t r;
@@ -442,6 +443,18 @@ int64_t		bapi_file_seek(bapi_file_t file, int64_t offset, int origin);
 int64_t		bapi_file_tell(bapi_file_t file);
 int64_t		bapi_file_size(bapi_file_t file);
 void		bapi_file_close(bapi_file_t file);
+
+/* Resource pack (RZip .rz), read-only. Single-threaded use; the returned name
+ * pointers and the handle stay valid until bapi_pack_close(). */
+bapi_pack_t bapi_pack_open(const char *path);
+void		bapi_pack_close(bapi_pack_t pack);
+int			bapi_pack_file_count(bapi_pack_t pack);
+const char *bapi_pack_file_name(bapi_pack_t pack, int index);
+int			bapi_pack_find_file(bapi_pack_t pack, const char *name);
+int64_t		bapi_pack_file_size(bapi_pack_t pack, const char *name);
+size_t		bapi_pack_read_file(bapi_pack_t pack, const char *name, void *buffer,
+								size_t buffer_size);
+uint8_t		*bapi_pack_read_file_alloc(bapi_pack_t pack, const char *name, size_t *out_size);
 
 #ifdef __cplusplus
 }

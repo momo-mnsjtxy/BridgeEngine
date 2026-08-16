@@ -894,6 +894,51 @@ void bapi_file_close(bapi_file_t file);
 ```
 关闭并释放文件句柄。`file` 为 `NULL` 时 no-op。关闭后不得再使用该句柄。
 
+### 资源包（RZip Pack）
+
+只读读取 RZip（`.rz`）资源包：枚举条目、按名字查询、整文件读取。仅桌面端实现；XJ380 上所有
+函数返回失败值并记录一次 warning。本组 API 为单线程使用：一个包对应一个句柄，句柄不可复制；
+`bapi_pack_file_name` 返回的名字指针归归档所有，`bapi_pack_close` 后失效。
+
+```c
+bapi_pack_t bapi_pack_open(const char *path);
+```
+打开资源包并解析头部与文件索引。失败（文件缺失、格式非法、截断）或 `path` 为 `NULL` 返回
+`NULL`。
+
+```c
+void bapi_pack_close(bapi_pack_t pack);
+```
+关闭归档并释放句柄。`pack` 为 `NULL` 时 no-op。关闭后不得再使用该句柄及其名字指针。
+
+```c
+int bapi_pack_file_count(bapi_pack_t pack);
+const char *bapi_pack_file_name(bapi_pack_t pack, int index);
+```
+条目数量与按索引取名字（索引 0 起，顺序与归档内顺序一致）。句柄非法返回 `-1`；
+`index` 越界返回 `NULL`。条目名按字节比较（UTF-8 不做归一化）。
+
+```c
+int bapi_pack_find_file(bapi_pack_t pack, const char *name);
+```
+按名字查找条目，返回索引；未找到或参数非法返回 `-1`。名字重复时返回第一个匹配。
+
+```c
+int64_t bapi_pack_file_size(bapi_pack_t pack, const char *name);
+```
+条目的逻辑（解压后）大小。当前 RZip 版本未实现压缩（`comp_size == dcom_size`），两者相等。
+未找到或参数非法返回 `-1`。
+
+```c
+size_t bapi_pack_read_file(bapi_pack_t pack, const char *name, void *buffer, size_t buffer_size);
+uint8_t *bapi_pack_read_file_alloc(bapi_pack_t pack, const char *name, size_t *out_size);
+```
+整文件读取。`read_file` 把条目内容拷入调用方缓冲区，返回实际拷贝字节数；缓冲区小于文件时
+截断（不视为错误）；参数非法或读取失败返回 0。空文件返回 0（与"未找到"不可区分，先
+`find_file` 判断存在性）。`read_file_alloc` 返回 `malloc` 的缓冲区（调用方 `free`），失败返回
+`NULL`；空文件返回非 `NULL` 的空缓冲区且 `*out_size == 0`。`out_size` 可为 `NULL`，仅在成功时
+写入。
+
 ### 版本
 
 ```c
