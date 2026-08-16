@@ -440,6 +440,13 @@ static int sdl3_poll_event(plat_event_t *event)
 			event->data.motion.x = sdl_event.motion.x;
 			event->data.motion.y = sdl_event.motion.y;
 			return 1;
+		case SDL_EVENT_MOUSE_WHEEL:
+			event->type				= PLAT_EVENT_MOUSE_WHEEL;
+			event->data.wheel.x		= sdl_event.wheel.x;
+			event->data.wheel.y		= sdl_event.wheel.y;
+			event->data.wheel.mouse_x = sdl_event.wheel.mouse_x;
+			event->data.wheel.mouse_y = sdl_event.wheel.mouse_y;
+			return 1;
 		default:
 
 			continue;
