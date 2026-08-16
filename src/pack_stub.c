@@ -87,3 +87,53 @@ uint8_t *bapi_pack_read_file_alloc(bapi_pack_t pack, const char *name, size_t *o
 	warn_pack_unsupported_once(plat);
 	return NULL;
 }
+
+bapi_pack_stream_t bapi_pack_stream_open(bapi_pack_t pack, const char *name)
+{
+	(void)pack;
+	(void)name;
+	const plat_interface_t *plat = plat_get();
+	warn_pack_unsupported_once(plat);
+	return NULL;
+}
+
+size_t bapi_pack_stream_read(bapi_pack_stream_t stream, void *buffer, size_t size)
+{
+	(void)stream;
+	(void)buffer;
+	(void)size;
+	const plat_interface_t *plat = plat_get();
+	warn_pack_unsupported_once(plat);
+	return 0;
+}
+
+int64_t bapi_pack_stream_seek(bapi_pack_stream_t stream, int64_t offset, int whence)
+{
+	(void)stream;
+	(void)offset;
+	(void)whence;
+	const plat_interface_t *plat = plat_get();
+	warn_pack_unsupported_once(plat);
+	return -1;
+}
+
+int64_t bapi_pack_stream_tell(bapi_pack_stream_t stream)
+{
+	(void)stream;
+	const plat_interface_t *plat = plat_get();
+	warn_pack_unsupported_once(plat);
+	return -1;
+}
+
+int64_t bapi_pack_stream_size(bapi_pack_stream_t stream)
+{
+	(void)stream;
+	const plat_interface_t *plat = plat_get();
+	warn_pack_unsupported_once(plat);
+	return -1;
+}
+
+void bapi_pack_stream_close(bapi_pack_stream_t stream)
+{
+	(void)stream;
+}

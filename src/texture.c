@@ -58,25 +58,16 @@ static void bapi_texture_release(bapi_texture_t texture)
 	bapi_texture_free(texture);
 }
 
-bapi_texture_t bapi_texture_load(const char *filepath)
+static bapi_texture_t texture_from_surface(const char *label, plat_surface_t *surface)
 {
-	if (!filepath || !filepath[0]) return NULL;
-
 	const plat_interface_t *plat = plat_get();
-	if (!plat) return NULL;
-
-	plat_surface_t *surface = plat->texture.load_image(filepath);
-	if (!surface) {
-		printf("[TEXTURE] Failed to load: %s\n", filepath);
-		return NULL;
-	}
 
 	plat_texture_t plat_tex =
 		plat->texture.create_texture_from_surface(bapi_internal_get_renderer(), surface);
 	plat->texture.destroy_surface(surface);
 
 	if (!plat_tex) {
-		printf("[TEXTURE] Failed to create texture from: %s\n", filepath);
+		printf("[TEXTURE] Failed to create texture from: %s\n", label);
 		return NULL;
 	}
 
@@ -96,6 +87,52 @@ bapi_texture_t bapi_texture_load(const char *filepath)
 	tex->next_allocated = g_allocated_textures;
 	g_allocated_textures = tex;
 	return tex;
+}
+
+bapi_texture_t bapi_texture_load(const char *filepath)
+{
+	if (!filepath || !filepath[0]) return NULL;
+
+	const plat_interface_t *plat = plat_get();
+	if (!plat) return NULL;
+
+	plat_surface_t *surface = NULL;
+	if (plat->io.open_read && plat->io.read && plat->texture.load_image_mem) {
+		/* Two-stage load: read the file into memory, decode from memory. */
+		size_t	 size = 0;
+		uint8_t *data = bapi_file_read_alloc(filepath, &size);
+		if (!data) {
+			printf("[TEXTURE] Failed to read: %s\n", filepath);
+			return NULL;
+		}
+		surface = plat->texture.load_image_mem(data, size);
+		free(data);
+	} else if (plat->texture.load_image) {
+		surface = plat->texture.load_image(filepath);
+	}
+
+	if (!surface) {
+		printf("[TEXTURE] Failed to load: %s\n", filepath);
+		return NULL;
+	}
+
+	return texture_from_surface(filepath, surface);
+}
+
+bapi_texture_t bapi_texture_load_from_memory(const void *data, size_t size)
+{
+	const plat_interface_t *plat = plat_get();
+	if (!plat || !plat->texture.load_image_mem) return NULL;
+
+	if (!data || size == 0) return NULL;
+
+	plat_surface_t *surface = plat->texture.load_image_mem(data, size);
+	if (!surface) {
+		printf("[TEXTURE] Failed to decode image from memory\n");
+		return NULL;
+	}
+
+	return texture_from_surface("<memory>", surface);
 }
 
 void bapi_texture_destroy(bapi_texture_t texture)

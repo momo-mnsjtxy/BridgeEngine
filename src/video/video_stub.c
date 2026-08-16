@@ -38,6 +38,24 @@ bapi_video_t bapi_video_load(const char *filepath)
 	return NULL;
 }
 
+bapi_video_t bapi_video_load_from_memory(const void *data, size_t size)
+{
+	(void)data;
+	(void)size;
+	const plat_interface_t *plat = plat_get();
+	warn_video_unsupported_once(plat);
+	return NULL;
+}
+
+bapi_video_t bapi_video_load_from_pack_stream(bapi_pack_t pack, const char *name)
+{
+	(void)pack;
+	(void)name;
+	const plat_interface_t *plat = plat_get();
+	warn_video_unsupported_once(plat);
+	return NULL;
+}
+
 void bapi_video_free(bapi_video_t video)
 {
 	(void)video;

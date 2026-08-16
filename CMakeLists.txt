@@ -76,6 +76,7 @@ set(BRIDGEENGINE_CORE_SOURCES
 	src/core/version.c
 	src/io.c
 	src/pack.c
+	src/resource.c
 	src/log.c
 )
 set(BRIDGEENGINE_RENDER_SOURCES
@@ -446,6 +447,7 @@ if(BRIDGEENGINE_BUILD_TESTS)
 	add_executable(bridgeengine_texture_test
 		tests/texture_test.c
 		src/texture.c
+		src/io.c
 		src/platform/platform.c
 	)
 	target_include_directories(bridgeengine_texture_test PRIVATE
@@ -499,6 +501,7 @@ if(BRIDGEENGINE_BUILD_TESTS)
 	add_executable(bridgeengine_platform_capabilities_test
 		tests/platform_capabilities_test.c
 		src/audio.c
+		src/io.c
 		src/video/video_stub.c
 		src/core/init.c
 		src/core/render_context.c
@@ -590,6 +593,7 @@ if(BRIDGEENGINE_BUILD_TESTS)
 		src/core/render_context.c
 		src/texture.c
 		src/audio.c
+		src/io.c
 		src/video/video_stub.c
 		src/platform/platform.c
 	)
@@ -653,6 +657,51 @@ if(BRIDGEENGINE_BUILD_TESTS)
 		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/rzip"
 	)
 	add_test(NAME bridgeengine.pack COMMAND bridgeengine_pack_test "${CMAKE_CURRENT_BINARY_DIR}")
+
+	add_executable(bridgeengine_resource_mem_test
+		tests/resource_mem_test.c
+		src/io.c
+		src/pack.c
+		src/resource.c
+		src/audio.c
+		src/texture.c
+		src/video/video_stub.c
+		src/platform/platform.c
+		thirdparty/rzip/rz_lib.c
+	)
+	target_include_directories(bridgeengine_resource_mem_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/rzip"
+	)
+	add_test(NAME bridgeengine.resource_mem
+		COMMAND bridgeengine_resource_mem_test "${CMAKE_CURRENT_BINARY_DIR}"
+	)
+
+	if(BRIDGEENGINE_BUILD_SHARED OR BRIDGEENGINE_BUILD_STATIC OR BRIDGEENGINE_BUILD_EXAMPLES)
+		add_executable(bridgeengine_media_pack_backend_test
+			tests/media_pack_backend_test.c
+			src/platform/platform.c
+			src/platform/sdl3/platform_sdl3.c
+			src/platform/sdl3/keycode.c
+			src/core/init.c
+			src/core/render_context.c
+			src/audio.c
+			src/texture.c
+			src/io.c
+			src/resource.c
+			src/pack.c
+			src/video/video.c
+			thirdparty/rzip/rz_lib.c
+		)
+		bridgeengine_configure_target(bridgeengine_media_pack_backend_test)
+		add_test(NAME bridgeengine.media_pack_backend
+			COMMAND bridgeengine_media_pack_backend_test
+				"${CMAKE_CURRENT_BINARY_DIR}"
+				"${CMAKE_CURRENT_SOURCE_DIR}/examples/assets"
+		)
+	endif()
 endif()
 
 if(BRIDGEENGINE_BUILD_SHARED)
@@ -834,6 +883,7 @@ if(BRIDGEENGINE_BUILD_XJ380)
 		src/core/version.c
 		src/io.c
 		src/pack_stub.c
+		src/resource.c
 		src/log.c
 		src/draw.c
 		src/input/mouse_drawing.c

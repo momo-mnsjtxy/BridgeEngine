@@ -232,6 +232,13 @@ void bapi_mouse_draw_line(float x1, float y1, float x2, float y2, bapi_color_t c
 bapi_texture_t bapi_texture_load(const char *filepath);
 ```
 从文件加载纹理，返回新句柄（引用计数 1）。失败返回 `NULL`。**不经过缓存**，每次都是新对象。
+平台同时支持内存解码时走两段式流程：先把整个文件读入内存缓冲，再从内存解码。
+
+```c
+bapi_texture_t bapi_texture_load_from_memory(const void *data, size_t size);
+```
+从内存中的图片字节解码纹理，语义同 `bapi_texture_load`。输入缓冲仅在调用期间被读取，不被持有；
+`data` 为 `NULL`、`size` 为 0 或平台不支持内存解码时返回 `NULL`。不经过缓存。
 
 ```c
 void bapi_texture_destroy(bapi_texture_t texture);
@@ -275,6 +282,14 @@ void bapi_audio_cleanup(void);
 bapi_sound_t bapi_sound_load(const char *filepath);
 ```
 加载 WAV 文件。成功返回句柄（初始音量 1.0、不循环、未播放）；失败或平台不支持返回 `NULL`。
+平台同时支持内存解码时走两段式流程：先把整个文件读入内存缓冲，再从内存解码。
+
+```c
+bapi_sound_t bapi_sound_load_from_memory(const void *data, size_t size);
+```
+从内存中的 WAV 字节解码声音，语义同 `bapi_sound_load`。输入缓冲仅在调用期间被读取，不被持有
+（解码出的 PCM 归声音句柄所有）；`data` 为 `NULL`、`size` 为 0 或平台不支持内存解码时返回
+`NULL`。
 
 ```c
 int bapi_sound_play(bapi_sound_t sound);
@@ -313,7 +328,21 @@ void bapi_video_cleanup(void);
 bapi_video_t bapi_video_load(const char *filepath);
 ```
 加载 MP4/AVI/MKV 等 FFmpeg 支持的容器。成功返回句柄（未播放、音量 1.0、不循环）；失败或平台不
-支持返回 `NULL`。加载时若音轨可解码则同时初始化音频流。
+支持返回 `NULL`。加载时若音轨可解码则同时初始化音频流。磁盘文件走流式读取（按需 seek/read，
+不整文件入内存）。
+
+```c
+bapi_video_t bapi_video_load_from_memory(const void *data, size_t size);
+```
+从内存中的视频字节加载，语义同 `bapi_video_load`。**视频持有输入数据的内部拷贝**，由
+`bapi_video_free` 释放，调用方缓冲可在返回后立即释放。`data` 为 `NULL` 或 `size` 为 0 返回
+`NULL`。
+
+```c
+bapi_video_t bapi_video_load_from_pack_stream(bapi_pack_t pack, const char *name);
+```
+以流式方式从资源包条目加载视频：不开全量内存缓冲，解码时按需从包内读取。视频持有并最终关闭
+该流；**包必须在视频释放前保持打开**。条目不存在或 `name` 为 `NULL` 返回 `NULL`。
 
 ```c
 void bapi_video_free(bapi_video_t video);
@@ -1071,6 +1100,13 @@ void bapi_file_close(bapi_file_t file);
 ```
 关闭并释放文件句柄。`file` 为 `NULL` 时 no-op。关闭后不得再使用该句柄。
 
+```c
+uint8_t *bapi_file_read_alloc(const char *path, size_t *out_size);
+```
+把整个文件读入 `malloc` 的缓冲区（调用方 `free`）。失败（文件缺失、分配失败、`path` 为 `NULL`）
+返回 `NULL`，且 `*out_size` 不被写入；空文件返回非 `NULL` 的空缓冲区且 `*out_size == 0`。
+`out_size` 可为 `NULL`。
+
 ### 资源包（RZip Pack）
 
 只读读取 RZip（`.rz`）资源包：枚举条目、按名字查询、整文件读取。仅桌面端实现；XJ380 上所有
@@ -1115,6 +1151,28 @@ uint8_t *bapi_pack_read_file_alloc(bapi_pack_t pack, const char *name, size_t *o
 `find_file` 判断存在性）。`read_file_alloc` 返回 `malloc` 的缓冲区（调用方 `free`），失败返回
 `NULL`；空文件返回非 `NULL` 的空缓冲区且 `*out_size == 0`。`out_size` 可为 `NULL`，仅在成功时
 写入。
+
+```c
+bapi_pack_stream_t bapi_pack_stream_open(bapi_pack_t pack, const char *name);
+size_t bapi_pack_stream_read(bapi_pack_stream_t stream, void *buffer, size_t size);
+int64_t bapi_pack_stream_seek(bapi_pack_stream_t stream, int64_t offset, int whence);
+int64_t bapi_pack_stream_tell(bapi_pack_stream_t stream);
+int64_t bapi_pack_stream_size(bapi_pack_stream_t stream);
+void bapi_pack_stream_close(bapi_pack_stream_t stream);
+```
+流式读取单个条目：`read` 从当前偏移读取最多 `size` 字节（到达条目末尾返回 0）；`seek` 的
+`whence` 与 `fseek` 一致（`SEEK_SET`/`SEEK_CUR`/`SEEK_END`），位置钳制在 `[0, size]`，返回新偏移；
+`tell` 返回当前偏移；`size` 返回条目大小。参数非法返回 0 / `-1`。流借用包句柄：**包必须在流关闭
+前保持打开**。`open` 在条目不存在或参数非法时返回 `NULL`；`close` 释放流，`NULL` 时 no-op。
+
+```c
+bapi_sound_t bapi_sound_load_from_pack(bapi_pack_t pack, const char *name);
+bapi_texture_t bapi_texture_load_from_pack(bapi_pack_t pack, const char *name);
+bapi_video_t bapi_video_load_from_pack(bapi_pack_t pack, const char *name);
+```
+全量缓冲套的包内加载：把条目整体读入内存缓冲后交给对应的 `*_load_from_memory` 解码，缓冲在解码
+后立即释放，解码资源的归属见对应内存加载接口。条目不存在、平台不支持资源包或内存解码时返回
+`NULL`。
 
 ### 版本
 

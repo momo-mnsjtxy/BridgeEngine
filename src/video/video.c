@@ -9,11 +9,28 @@
 #include <libswscale/swscale.h>
 #include <limits.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #define VIDEO_AUDIO_BYTES_PER_SAMPLE ((int)sizeof(float) * 2)
+
+/* Engine-level byte source handed to the FFmpeg AVIO callbacks. Three kinds:
+ * disk files (plat_io_t), owned memory copies, and pack entry streams. */
+typedef struct {
+	void   *user;
+	size_t (*read)(void *user, void *buf, size_t size);
+	int64_t (*seek)(void *user, int64_t offset, int whence);
+	int64_t (*size)(void *user);
+	void   (*close)(void *user);
+} video_source_t;
+
+struct video_mem_source {
+	uint8_t *data;
+	size_t	 size;
+	size_t	 pos;
+};
 
 struct bapi_video_internal {
 	AVFormatContext	  *format_ctx;
@@ -34,7 +51,7 @@ struct bapi_video_internal {
 	uint8_t			   *audio_buffer;
 	int					audio_buffer_size;
 
-	plat_io_t			*plat_io;
+	video_source_t		source;
 	uint8_t				*avio_buffer;
 
 	int				   video_stream_idx;
@@ -72,24 +89,130 @@ static void warn_video_unsupported_once(const plat_interface_t *plat)
 	}
 }
 
+static size_t video_disk_read(void *user, void *buf, size_t size)
+{
+	plat_io_t *io = (plat_io_t *)user;
+	const plat_interface_t *plat = plat_get();
+	if (!plat || !io || !buf) return 0;
+	return plat->io.read(io, buf, size);
+}
+
+static int64_t video_disk_seek(void *user, int64_t offset, int whence)
+{
+	plat_io_t *io = (plat_io_t *)user;
+	const plat_interface_t *plat = plat_get();
+	if (!plat || !io) return -1;
+	return plat->io.seek(io, offset, whence);
+}
+
+static int64_t video_disk_size(void *user)
+{
+	plat_io_t *io = (plat_io_t *)user;
+	const plat_interface_t *plat = plat_get();
+	if (!plat || !io) return -1;
+	return plat->io.size(io);
+}
+
+static void video_disk_close(void *user)
+{
+	plat_io_t *io = (plat_io_t *)user;
+	const plat_interface_t *plat = plat_get();
+	if (plat && io) plat->io.close(io);
+}
+
+static size_t video_mem_read(void *user, void *buf, size_t size)
+{
+	struct video_mem_source *mem = (struct video_mem_source *)user;
+	if (!mem || !buf) return 0;
+	size_t remaining = mem->size - mem->pos;
+	size_t want	  = remaining < size ? remaining : size;
+	memcpy(buf, mem->data + mem->pos, want);
+	mem->pos += want;
+	return want;
+}
+
+static int64_t video_mem_seek(void *user, int64_t offset, int whence)
+{
+	struct video_mem_source *mem = (struct video_mem_source *)user;
+	if (!mem) return -1;
+
+	uint64_t base;
+	if (whence == SEEK_SET) {
+		base = 0;
+	} else if (whence == SEEK_CUR) {
+		base = mem->pos;
+	} else if (whence == SEEK_END) {
+		base = mem->size;
+	} else {
+		return -1;
+	}
+
+	uint64_t target;
+	if (offset < 0) {
+		uint64_t magnitude = (uint64_t)(-(offset + 1)) + 1;
+		target			   = magnitude <= base ? base - magnitude : 0;
+	} else if (base > UINT64_MAX - (uint64_t)offset) {
+		target = mem->size; /* overflow: clamp to end */
+	} else {
+		target = base + (uint64_t)offset;
+		if (target > mem->size) target = mem->size;
+	}
+
+	mem->pos = (size_t)target;
+	return (int64_t)target;
+}
+
+static int64_t video_mem_size(void *user)
+{
+	struct video_mem_source *mem = (struct video_mem_source *)user;
+	return mem ? (int64_t)mem->size : -1;
+}
+
+static void video_mem_close(void *user)
+{
+	struct video_mem_source *mem = (struct video_mem_source *)user;
+	if (mem) {
+		free(mem->data);
+		free(mem);
+	}
+}
+
+static size_t video_pack_read(void *user, void *buf, size_t size)
+{
+	return bapi_pack_stream_read((bapi_pack_stream_t)user, buf, size);
+}
+
+static int64_t video_pack_seek(void *user, int64_t offset, int whence)
+{
+	return bapi_pack_stream_seek((bapi_pack_stream_t)user, offset, whence);
+}
+
+static int64_t video_pack_size(void *user)
+{
+	return bapi_pack_stream_size((bapi_pack_stream_t)user);
+}
+
+static void video_pack_close(void *user)
+{
+	bapi_pack_stream_close((bapi_pack_stream_t)user);
+}
+
 static int video_io_read_packet(void *opaque, uint8_t *buf, int buf_size)
 {
-	plat_io_t *io = (plat_io_t *)opaque;
-	const plat_interface_t *plat = plat_get();
-	if (!plat || !io || !buf || buf_size <= 0) return AVERROR(EIO);
-	size_t bytes_read = plat->io.read(io, buf, (size_t)buf_size);
+	video_source_t *source = (video_source_t *)opaque;
+	if (!source || !source->user || !source->read || !buf || buf_size <= 0) return AVERROR(EIO);
+	size_t bytes_read = source->read(source->user, buf, (size_t)buf_size);
 	return bytes_read > 0 ? (int)bytes_read : AVERROR_EOF;
 }
 
 static int64_t video_io_seek_packet(void *opaque, int64_t offset, int whence)
 {
-	plat_io_t *io = (plat_io_t *)opaque;
-	const plat_interface_t *plat = plat_get();
-	if (!plat || !io) return -1;
+	video_source_t *source = (video_source_t *)opaque;
+	if (!source || !source->user || !source->seek || !source->size) return -1;
 	if (whence == AVSEEK_SIZE) {
-		return plat->io.size(io);
+		return source->size(source->user);
 	}
-	return plat->io.seek(io, offset, whence);
+	return source->seek(source->user, offset, whence);
 }
 
 static void remove_allocated_video(bapi_video_t video)
@@ -448,34 +571,20 @@ void bapi_video_cleanup(void)
 	printf("[VIDEO] Video subsystem cleaned up\n");
 }
 
-bapi_video_t bapi_video_load(const char *filepath)
+static bapi_video_t bapi_video_load_with_source(video_source_t source, const char *label)
 {
-	const plat_interface_t *plat = plat_get();
-	if (!plat_supports(PLAT_CAPABILITY_VIDEO)) {
-		warn_video_unsupported_once(plat);
-		return NULL;
-	}
-
-	if (filepath == NULL) {
-		printf("[VIDEO] Error: filepath is NULL\n");
-		return NULL;
-	}
-
-	if (bapi_internal_get_renderer() == NULL) {
-		printf("[VIDEO] Error: renderer not initialized\n");
-		return NULL;
-	}
-
 	bapi_video_t video = malloc(sizeof(struct bapi_video_internal));
 	if (video == NULL) {
 		printf("[VIDEO] Error: Failed to allocate video struct\n");
+		if (source.user && source.close) source.close(source.user);
 		return NULL;
 	}
 	memset(video, 0, sizeof(struct bapi_video_internal));
 
-	video->filepath = bapi_video_copy_string(filepath);
+	video->filepath = bapi_video_copy_string(label);
 	if (video->filepath == NULL) {
 		printf("[VIDEO] Error: Failed to copy filepath\n");
+		if (source.user && source.close) source.close(source.user);
 		free(video);
 		return NULL;
 	}
@@ -486,85 +595,49 @@ bapi_video_t bapi_video_load(const char *filepath)
 	video->video_stream_idx = -1;
 	video->audio_stream_idx = -1;
 	video->source_pix_fmt	= AV_PIX_FMT_NONE;
-	video->plat_io			= NULL;
+	video->source			= source;
 	video->avio_buffer		= NULL;
 
-	{
-		const plat_interface_t *plat = plat_get();
-		if (plat && plat->io.open_read) {
-			plat_io_t *io = plat->io.open_read(filepath);
-			if (!io) {
-				printf("[VIDEO] Error: Cannot open file %s\n", filepath);
-				free(video->filepath);
-				free(video);
-				return NULL;
-			}
-			video->plat_io = io;
+	if (source.user != NULL) {
+		uint8_t *avio_buf = (uint8_t *)av_malloc(4096);
+		if (!avio_buf) {
+			goto load_error;
+		}
+		video->avio_buffer = avio_buf;
 
-			uint8_t *avio_buf = (uint8_t *)av_malloc(4096);
-			if (!avio_buf) {
-				plat->io.close(io);
-				video->plat_io = NULL;
-				free(video->filepath);
-				free(video);
-				return NULL;
-			}
-			video->avio_buffer = avio_buf;
+		AVIOContext *avio = avio_alloc_context(avio_buf, 4096, 0, &video->source,
+			video_io_read_packet, NULL, video_io_seek_packet);
+		if (!avio) {
+			av_free(avio_buf);
+			video->avio_buffer = NULL;
+			goto load_error;
+		}
 
-			AVIOContext *avio = avio_alloc_context(avio_buf, 4096, 0, io,
-				video_io_read_packet, NULL, video_io_seek_packet);
-			if (!avio) {
-				av_free(avio_buf);
-				video->avio_buffer = NULL;
-				plat->io.close(io);
-				video->plat_io = NULL;
-				free(video->filepath);
-				free(video);
-				return NULL;
-			}
+		video->format_ctx = avformat_alloc_context();
+		if (!video->format_ctx) {
+			avio_context_free(&avio);
+			video->avio_buffer = NULL;
+			goto load_error;
+		}
+		video->format_ctx->pb = avio;
 
-			video->format_ctx = avformat_alloc_context();
-			if (!video->format_ctx) {
-				avio_context_free(&avio);
-				video->avio_buffer = NULL;
-				plat->io.close(io);
-				video->plat_io = NULL;
-				free(video->filepath);
-				free(video);
-				return NULL;
-			}
-			video->format_ctx->pb = avio;
-
-			if (avformat_open_input(&video->format_ctx, "", NULL, NULL) != 0) {
-				printf("[VIDEO] Error: Cannot open video file %s\n", filepath);
-				avformat_close_input(&video->format_ctx);
-				video->format_ctx = NULL;
-				video->avio_buffer = NULL;
-				if (plat && video->plat_io) {
-					plat->io.close(video->plat_io);
-					video->plat_io = NULL;
-				}
-				free(video->filepath);
-				free(video);
-				return NULL;
-			}
-		} else {
-			video->format_ctx = avformat_alloc_context();
-			if (avformat_open_input(&video->format_ctx, filepath, NULL, NULL) != 0) {
-				printf("[VIDEO] Error: Cannot open video file %s\n", filepath);
-				free(video->filepath);
-				free(video);
-				return NULL;
-			}
+		if (avformat_open_input(&video->format_ctx, "", NULL, NULL) != 0) {
+			printf("[VIDEO] Error: Cannot open video source %s\n", label);
+			goto load_error;
+		}
+	} else {
+		video->format_ctx = avformat_alloc_context();
+		if (avformat_open_input(&video->format_ctx, label, NULL, NULL) != 0) {
+			printf("[VIDEO] Error: Cannot open video file %s\n", label);
+			avformat_free_context(video->format_ctx);
+			video->format_ctx = NULL;
+			goto load_error;
 		}
 	}
 
 	if (avformat_find_stream_info(video->format_ctx, NULL) < 0) {
 		printf("[VIDEO] Error: Cannot find stream info\n");
-		avformat_close_input(&video->format_ctx);
-		free(video->filepath);
-		free(video);
-		return NULL;
+		goto load_error;
 	}
 
 	for (unsigned int i = 0; i < video->format_ctx->nb_streams; i++) {
@@ -580,47 +653,30 @@ bapi_video_t bapi_video_load(const char *filepath)
 
 	if (video->video_stream_idx < 0) {
 		printf("[VIDEO] Error: No video stream found\n");
-		avformat_close_input(&video->format_ctx);
-		free(video->filepath);
-		free(video);
-		return NULL;
+		goto load_error;
 	}
 
 	video->video_stream	 = video->format_ctx->streams[video->video_stream_idx];
 	const AVCodec *codec = avcodec_find_decoder(video->video_stream->codecpar->codec_id);
 	if (!codec) {
 		printf("[VIDEO] Error: Codec not found\n");
-		avformat_close_input(&video->format_ctx);
-		free(video->filepath);
-		free(video);
-		return NULL;
+		goto load_error;
 	}
 
 	video->codec_ctx = avcodec_alloc_context3(codec);
 	if (!video->codec_ctx) {
 		printf("[VIDEO] Error: Failed to allocate codec context\n");
-		avformat_close_input(&video->format_ctx);
-		free(video->filepath);
-		free(video);
-		return NULL;
+		goto load_error;
 	}
 
 	if (avcodec_parameters_to_context(video->codec_ctx, video->video_stream->codecpar) < 0) {
 		printf("[VIDEO] Error: Failed to copy codec parameters\n");
-		avcodec_free_context(&video->codec_ctx);
-		avformat_close_input(&video->format_ctx);
-		free(video->filepath);
-		free(video);
-		return NULL;
+		goto load_error;
 	}
 
 	if (avcodec_open2(video->codec_ctx, codec, NULL) < 0) {
 		printf("[VIDEO] Error: Failed to open codec\n");
-		avcodec_free_context(&video->codec_ctx);
-		avformat_close_input(&video->format_ctx);
-		free(video->filepath);
-		free(video);
-		return NULL;
+		goto load_error;
 	}
 
 	video->time_base = av_q2d(video->video_stream->time_base);
@@ -637,36 +693,158 @@ bapi_video_t bapi_video_load(const char *filepath)
 	video->frame_rgb = av_frame_alloc();
 	if (!video->frame || !video->frame_rgb) {
 		printf("[VIDEO] Error: Failed to allocate frames\n");
-		goto cleanup_error;
+		goto load_error;
 	}
 
 	video->packet = av_packet_alloc();
 	if (!video->packet) {
 		printf("[VIDEO] Error: Failed to allocate packet\n");
-		goto cleanup_error;
+		goto load_error;
 	}
 
 	if (init_audio_decoder(video) < 0) {
-		printf("[VIDEO] Warning: audio track disabled for %s\n", filepath);
+		printf("[VIDEO] Warning: audio track disabled for %s\n", label);
 	}
 
-	printf("[VIDEO] Loaded: %s (%dx%d @ %.2f fps, duration: %.2fs)\n", filepath, video->width,
+	printf("[VIDEO] Loaded: %s (%dx%d @ %.2f fps, duration: %.2fs)\n", label, video->width,
 		   video->height, video->fps, video->duration);
 
 	video->next_allocated = g_allocated_videos;
 	g_allocated_videos = video;
 	return video;
 
-cleanup_error:
+load_error:
 	if (video->sws_ctx) sws_freeContext(video->sws_ctx);
 	if (video->buffer) av_free(video->buffer);
 	if (video->frame_rgb) av_frame_free(&video->frame_rgb);
 	if (video->frame) av_frame_free(&video->frame);
 	if (video->codec_ctx) avcodec_free_context(&video->codec_ctx);
-	if (video->format_ctx) avformat_close_input(&video->format_ctx);
+	if (video->format_ctx) {
+		avformat_close_input(&video->format_ctx);
+		video->avio_buffer = NULL; /* freed together with the AVIOContext */
+	}
+	if (video->avio_buffer) {
+		av_free(video->avio_buffer);
+		video->avio_buffer = NULL;
+	}
+	if (video->source.user && video->source.close) {
+		video->source.close(video->source.user);
+		video->source.user = NULL;
+	}
 	if (video->filepath) free(video->filepath);
 	free(video);
 	return NULL;
+}
+
+static bapi_video_t video_load_guarded(video_source_t source, const char *label)
+{
+	const plat_interface_t *plat = plat_get();
+	if (!plat_supports(PLAT_CAPABILITY_VIDEO)) {
+		warn_video_unsupported_once(plat);
+		if (source.user && source.close) source.close(source.user);
+		return NULL;
+	}
+
+	if (bapi_internal_get_renderer() == NULL) {
+		printf("[VIDEO] Error: renderer not initialized\n");
+		if (source.user && source.close) source.close(source.user);
+		return NULL;
+	}
+
+	return bapi_video_load_with_source(source, label);
+}
+
+bapi_video_t bapi_video_load(const char *filepath)
+{
+	const plat_interface_t *plat = plat_get();
+	if (!plat_supports(PLAT_CAPABILITY_VIDEO)) {
+		warn_video_unsupported_once(plat);
+		return NULL;
+	}
+
+	if (filepath == NULL) {
+		printf("[VIDEO] Error: filepath is NULL\n");
+		return NULL;
+	}
+
+	video_source_t source = {NULL, NULL, NULL, NULL, NULL};
+	if (plat && plat->io.open_read) {
+		plat_io_t *io = plat->io.open_read(filepath);
+		if (!io) {
+			printf("[VIDEO] Error: Cannot open file %s\n", filepath);
+			return NULL;
+		}
+		source.user  = io;
+		source.read  = video_disk_read;
+		source.seek  = video_disk_seek;
+		source.size  = video_disk_size;
+		source.close = video_disk_close;
+	}
+
+	return video_load_guarded(source, filepath);
+}
+
+bapi_video_t bapi_video_load_from_memory(const void *data, size_t size)
+{
+	if (!data || size == 0) {
+		printf("[VIDEO] Error: invalid memory source\n");
+		return NULL;
+	}
+
+	struct video_mem_source *mem =
+		(struct video_mem_source *)malloc(sizeof(struct video_mem_source));
+	if (!mem) return NULL;
+
+	mem->data = (uint8_t *)malloc(size > 0 ? size : 1);
+	if (!mem->data) {
+		free(mem);
+		return NULL;
+	}
+	memcpy(mem->data, data, size);
+	mem->size = size;
+	mem->pos  = 0;
+
+	video_source_t source;
+	source.user  = mem;
+	source.read  = video_mem_read;
+	source.seek  = video_mem_seek;
+	source.size  = video_mem_size;
+	source.close = video_mem_close;
+
+	return video_load_guarded(source, "<memory>");
+}
+
+bapi_video_t bapi_video_load_from_pack_stream(bapi_pack_t pack, const char *name)
+{
+	if (!name) {
+		printf("[VIDEO] Error: pack entry name is NULL\n");
+		return NULL;
+	}
+
+	bapi_pack_stream_t stream = bapi_pack_stream_open(pack, name);
+	if (!stream) {
+		printf("[VIDEO] Error: Cannot open pack entry %s\n", name);
+		return NULL;
+	}
+
+	video_source_t source;
+	source.user  = stream;
+	source.read  = video_pack_read;
+	source.seek  = video_pack_seek;
+	source.size  = video_pack_size;
+	source.close = video_pack_close;
+
+	size_t label_length = strlen(name) + 6; /* "pack:" + name + NUL */
+	char  *label		   = (char *)malloc(label_length);
+	if (!label) {
+		bapi_pack_stream_close(stream);
+		return NULL;
+	}
+	snprintf(label, label_length, "pack:%s", name);
+
+	bapi_video_t video = video_load_guarded(source, label);
+	free(label);
+	return video;
 }
 
 void bapi_video_free(bapi_video_t video)
@@ -716,9 +894,9 @@ void bapi_video_free(bapi_video_t video)
 		avformat_close_input(&video->format_ctx);
 		video->avio_buffer = NULL;
 	}
-	if (plat && video->plat_io) {
-		plat->io.close(video->plat_io);
-		video->plat_io = NULL;
+	if (video->source.user && video->source.close) {
+		video->source.close(video->source.user);
+		video->source.user = NULL;
 	}
 	if (video->avio_buffer) {
 		av_free(video->avio_buffer);

@@ -25,6 +25,7 @@ typedef struct bapi_ui_component_internal  *bapi_ui_component_t;
 typedef struct bapi_project_internal	   *bapi_project_t;
 typedef struct bapi_file_internal		   *bapi_file_t;
 typedef struct bapi_pack_internal		   *bapi_pack_t;
+typedef struct bapi_pack_stream_internal   *bapi_pack_stream_t;
 
 typedef struct {
 	uint8_t r;
@@ -286,6 +287,9 @@ uint32_t	 bapi_get_ticks(void);
 int			 bapi_audio_init(void);
 void		 bapi_audio_cleanup(void);
 bapi_sound_t bapi_sound_load(const char *filepath);
+/* Decode WAV bytes held in memory. The input buffer is only read during the
+ * call and is not kept; the decoded PCM is owned by the returned sound. */
+bapi_sound_t bapi_sound_load_from_memory(const void *data, size_t size);
 int			 bapi_sound_play(bapi_sound_t sound);
 void		 bapi_sound_set_volume(bapi_sound_t sound, float volume);
 void		 bapi_sound_set_loop(bapi_sound_t sound, int loop);
@@ -411,6 +415,9 @@ void		   bapi_texture_render_ex(bapi_texture_t texture, float x, float y, float 
 void		   bapi_texture_get_size(bapi_texture_t texture, int *w, int *h);
 void		   bapi_texture_cache_clear(void);
 bapi_texture_t bapi_texture_from_file(const char *filepath, int *out_w, int *out_h);
+/* Decode image bytes held in memory. The input buffer is only read during the
+ * call and is not kept. */
+bapi_texture_t bapi_texture_load_from_memory(const void *data, size_t size);
 
 int			 bapi_video_init(void);
 void		 bapi_video_cleanup(void);
@@ -427,6 +434,14 @@ void bapi_video_set_volume(bapi_video_t video, float volume);
 int	 bapi_video_is_playing(bapi_video_t video);
 void bapi_video_get_size(bapi_video_t video, int *w, int *h);
 void bapi_video_update(void);
+/* Load video from memory: the bytes are copied into video-owned storage and
+ * freed by bapi_video_free(). The caller's buffer may be released right after
+ * the call. */
+bapi_video_t bapi_video_load_from_memory(const void *data, size_t size);
+/* Load video from a pack entry in streaming mode (no full-file buffer): the
+ * stream is owned by the returned video and closed by bapi_video_free().
+ * The pack must stay open until the video is freed. */
+bapi_video_t bapi_video_load_from_pack_stream(bapi_pack_t pack, const char *name);
 
 bapi_scene_manager_t bapi_scene_manager_load_from_xml(const char *filepath);
 bapi_level_manager_t bapi_level_manager_load_from_xml(const char *filepath);
@@ -546,6 +561,10 @@ int64_t		bapi_file_seek(bapi_file_t file, int64_t offset, int origin);
 int64_t		bapi_file_tell(bapi_file_t file);
 int64_t		bapi_file_size(bapi_file_t file);
 void		bapi_file_close(bapi_file_t file);
+/* Read a whole file into a malloc'd buffer; the caller frees it. Returns NULL
+ * on failure, in which case *out_size is left untouched. An empty file
+ * returns a non-NULL pointer with *out_size == 0. */
+uint8_t		*bapi_file_read_alloc(const char *path, size_t *out_size);
 
 /* Resource pack (RZip .rz), read-only. Single-threaded use; the returned name
  * pointers and the handle stay valid until bapi_pack_close(). */
@@ -558,6 +577,22 @@ int64_t		bapi_pack_file_size(bapi_pack_t pack, const char *name);
 size_t		bapi_pack_read_file(bapi_pack_t pack, const char *name, void *buffer,
 								size_t buffer_size);
 uint8_t		*bapi_pack_read_file_alloc(bapi_pack_t pack, const char *name, size_t *out_size);
+
+/* Streaming read of a pack entry. The stream borrows the pack: the pack must
+ * stay open until the stream is closed. seek() takes SEEK_SET/SEEK_CUR/SEEK_END
+ * (0/1/2) and clamps the position into [0, size]. */
+bapi_pack_stream_t bapi_pack_stream_open(bapi_pack_t pack, const char *name);
+size_t		bapi_pack_stream_read(bapi_pack_stream_t stream, void *buffer, size_t size);
+int64_t		bapi_pack_stream_seek(bapi_pack_stream_t stream, int64_t offset, int whence);
+int64_t		bapi_pack_stream_tell(bapi_pack_stream_t stream);
+int64_t		bapi_pack_stream_size(bapi_pack_stream_t stream);
+void		bapi_pack_stream_close(bapi_pack_stream_t stream);
+
+/* Load media from a pack entry via a whole-entry memory buffer (full-buffer
+ * set); see bapi_*_load_from_memory for ownership of the decoded resource. */
+bapi_sound_t	bapi_sound_load_from_pack(bapi_pack_t pack, const char *name);
+bapi_texture_t	bapi_texture_load_from_pack(bapi_pack_t pack, const char *name);
+bapi_video_t	bapi_video_load_from_pack(bapi_pack_t pack, const char *name);
 
 #ifdef __cplusplus
 }
