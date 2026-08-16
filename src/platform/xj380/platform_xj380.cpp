@@ -370,7 +370,7 @@ static void xj380_render_clear(plat_renderer_t renderer)
 	/* Compute in 64-bit first: w * h * sizeof(XCOLORA) overflows 32-bit int
 	 * for large windows and would allocate a short buffer. */
 	int64_t pixel_count = (int64_t)w * h;
-	if (pixel_count > (int64_t)INT32_MAX / (int64_t)sizeof(XCOLORA)) return;
+	if (pixel_count > (int64_t)0x7FFFFFFF / (int64_t)sizeof(XCOLORA)) return;
 
 	XCOLORA *buf = (XCOLORA *)xapi_AllocateMemory((UINT64)pixel_count * sizeof(XCOLORA));
 	if (!buf) return;
@@ -470,7 +470,7 @@ static void xj380_render_texture(plat_renderer_t renderer, plat_texture_t textur
 
 				int64_t scaled_count = (int64_t)render_w * render_h;
 				if (scaled_count <= 0 ||
-					scaled_count > (int64_t)INT32_MAX / (int64_t)sizeof(XCOLORA))
+					scaled_count > (int64_t)0x7FFFFFFF / (int64_t)sizeof(XCOLORA))
 					return;
 				XCOLORA *scaled = (XCOLORA *)xapi_AllocateMemory((UINT64)scaled_count *
 																 sizeof(XCOLORA));
@@ -533,7 +533,7 @@ static plat_texture_t xj380_create_texture_from_surface(plat_renderer_t renderer
 		t->height			= surface->height;
 		t->data.pixel.pitch = surface->width * 4;
 		int64_t size		= (int64_t)surface->width * surface->height * 4;
-		if (size <= 0 || size > (int64_t)INT32_MAX) {
+		if (size <= 0 || size > (int64_t)0x7FFFFFFF) {
 			free(t);
 			return NULL;
 		}
@@ -570,7 +570,7 @@ static plat_texture_t xj380_create_texture(plat_renderer_t renderer, plat_pixel_
 	/* Compute in 64-bit first: width * height * 4 overflows 32-bit int for
 	 * large textures and would allocate a short buffer. */
 	int64_t size = (int64_t)width * height * 4;
-	if (size <= 0 || size > (int64_t)INT32_MAX) {
+	if (size <= 0 || size > (int64_t)0x7FFFFFFF) {
 		free(t);
 		return NULL;
 	}
