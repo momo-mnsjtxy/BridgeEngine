@@ -480,7 +480,7 @@ bapi_ui_t bapi_ui_load_from_xml(const char *filepath)
 	fclose(file);
 	char	   *base_dir	= path_dirname(filepath);
 	bapi_ui_t	ui			= bapi_ui_create();
-	ui_parser_t parser		= {xml, base_dir, ui, 0};
+	ui_parser_t parser		= {xml, base_dir, ui, 0, 0};
 	ui_tag_t	root		= {0};
 	int			root_parsed = 0;
 	if (!base_dir || !ui || next_tag(&parser, &root) != 1 || root.closing ||
