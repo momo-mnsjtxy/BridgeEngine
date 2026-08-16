@@ -610,7 +610,8 @@ void bapi_ui_update(bapi_ui_t ui, const bapi_event_t *event)
 		return;
 	}
 	if (event->type == BAPI_EVENT_MOUSE_WHEEL) {
-		ui_handle_wheel(ui, event->data.wheel.x, event->data.wheel.y, event->data.wheel.delta);
+		ui_handle_wheel(ui, event->data.wheel.mouse_x, event->data.wheel.mouse_y,
+						event->data.wheel.y);
 		return;
 	}
 	for (int i = 0; i < ui->root_count; i++) ui_reset_transient(ui->roots[i]);

@@ -29,6 +29,7 @@ typedef enum {
 	PLAT_EVENT_MOUSE_BUTTON_DOWN,
 	PLAT_EVENT_MOUSE_BUTTON_UP,
 	PLAT_EVENT_MOUSE_MOTION,
+	PLAT_EVENT_MOUSE_WHEEL,
 } plat_event_type_t;
 
 
@@ -51,6 +52,12 @@ typedef struct {
 			float x;
 			float y;
 		} motion;
+		struct {
+			float x;
+			float y;
+			float mouse_x;
+			float mouse_y;
+		} wheel;
 	} data;
 } plat_event_t;
 

@@ -193,10 +193,10 @@ void EditorPreviewPanel(EditorState &state)
 		}
 		if (io.MouseWheel != 0.0f && !io.KeyCtrl) {
 			bapi_event_t ev = {};
-			ev.type			= BAPI_EVENT_MOUSE_WHEEL;
-			ev.data.wheel.x = doc_x(mouse.x);
-			ev.data.wheel.y = doc_y(mouse.y);
-			ev.data.wheel.delta = io.MouseWheel;
+			ev.type					= BAPI_EVENT_MOUSE_WHEEL;
+			ev.data.wheel.x			= io.MouseWheel;
+			ev.data.wheel.mouse_x	= doc_x(mouse.x);
+			ev.data.wheel.mouse_y	= doc_y(mouse.y);
 			bapi_ui_update(state.ui, &ev);
 		}
 	} else if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {

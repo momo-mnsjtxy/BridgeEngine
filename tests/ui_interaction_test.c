@@ -206,10 +206,11 @@ static void wheel(bapi_ui_t ui, float x, float y, float delta)
 {
 	bapi_event_t event;
 	memset(&event, 0, sizeof(event));
-	event.type			  = BAPI_EVENT_MOUSE_WHEEL;
-	event.data.wheel.x	  = x;
-	event.data.wheel.y	  = y;
-	event.data.wheel.delta = delta;
+	event.type				= BAPI_EVENT_MOUSE_WHEEL;
+	event.data.wheel.x		= x;
+	event.data.wheel.y		= delta;
+	event.data.wheel.mouse_x = x;
+	event.data.wheel.mouse_y = y;
 	bapi_ui_update(ui, &event);
 }
 

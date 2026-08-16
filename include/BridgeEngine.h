@@ -47,8 +47,8 @@ typedef enum {
 	BAPI_EVENT_MOUSE_BUTTON_UP	 = 3,
 	BAPI_EVENT_MOUSE_MOTION		 = 4,
 	BAPI_EVENT_KEY_UP			 = 5,
-	BAPI_EVENT_UNKNOWN			 = 6,
-	BAPI_EVENT_MOUSE_WHEEL		 = 7,
+	BAPI_EVENT_MOUSE_WHEEL		 = 6,
+	BAPI_EVENT_UNKNOWN			 = 7,
 	BAPI_EVENT_TEXT_INPUT		 = 8,
 } bapi_event_type_t;
 
@@ -70,7 +70,8 @@ typedef struct {
 		struct {
 			float x;
 			float y;
-			float delta;
+			float mouse_x;
+			float mouse_y;
 		} wheel;
 		struct {
 			char text[32];
@@ -239,6 +240,10 @@ int		bapi_event_get_mouse_y(const bapi_event_t *event);
 int		bapi_event_get_mouse_button(const bapi_event_t *event);
 int		bapi_event_get_motion_x(const bapi_event_t *event);
 int		bapi_event_get_motion_y(const bapi_event_t *event);
+float	bapi_event_get_wheel_x(const bapi_event_t *event);
+float	bapi_event_get_wheel_y(const bapi_event_t *event);
+float	bapi_event_get_wheel_mouse_x(const bapi_event_t *event);
+float	bapi_event_get_wheel_mouse_y(const bapi_event_t *event);
 int		bapi_event_is_mouse_button_down(const bapi_event_t *event);
 int		bapi_event_is_mouse_button_up(const bapi_event_t *event);
 int		bapi_event_is_mouse_motion(const bapi_event_t *event);

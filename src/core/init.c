@@ -38,6 +38,13 @@ static void bapi_event_from_platform(bapi_event_t *dst, const plat_event_t *src)
 		dst->data.motion.x = src->data.motion.x;
 		dst->data.motion.y = src->data.motion.y;
 		break;
+	case PLAT_EVENT_MOUSE_WHEEL:
+		dst->type				= BAPI_EVENT_MOUSE_WHEEL;
+		dst->data.wheel.x		= src->data.wheel.x;
+		dst->data.wheel.y		= src->data.wheel.y;
+		dst->data.wheel.mouse_x = src->data.wheel.mouse_x;
+		dst->data.wheel.mouse_y = src->data.wheel.mouse_y;
+		break;
 	default:
 		dst->type = BAPI_EVENT_UNKNOWN;
 		break;
@@ -177,6 +184,26 @@ int bapi_event_get_motion_x(const bapi_event_t *event)
 int bapi_event_get_motion_y(const bapi_event_t *event)
 {
 	return event != NULL ? (int)event->data.motion.y : 0;
+}
+
+float bapi_event_get_wheel_x(const bapi_event_t *event)
+{
+	return event != NULL ? event->data.wheel.x : 0.0f;
+}
+
+float bapi_event_get_wheel_y(const bapi_event_t *event)
+{
+	return event != NULL ? event->data.wheel.y : 0.0f;
+}
+
+float bapi_event_get_wheel_mouse_x(const bapi_event_t *event)
+{
+	return event != NULL ? event->data.wheel.mouse_x : 0.0f;
+}
+
+float bapi_event_get_wheel_mouse_y(const bapi_event_t *event)
+{
+	return event != NULL ? event->data.wheel.mouse_y : 0.0f;
 }
 
 int bapi_event_is_mouse_button_down(const bapi_event_t *event)
