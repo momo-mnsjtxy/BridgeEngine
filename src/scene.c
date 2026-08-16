@@ -3,6 +3,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Hash the same truncated form that is stored in ->name, so that names
+ * longer than MAX_NAME_LENGTH-1 stay addressable by their full input. */
+static uint32_t hash_name(const char *name)
+{
+	char truncated[MAX_NAME_LENGTH];
+	strncpy(truncated, name, MAX_NAME_LENGTH - 1);
+	truncated[MAX_NAME_LENGTH - 1] = '\0';
+	return bapi_hash_string(truncated);
+}
+
+/* Stored names are truncated to MAX_NAME_LENGTH-1; compare that prefix. */
+static int name_matches(const char *stored, const char *input)
+{
+	return strncmp(stored, input, MAX_NAME_LENGTH - 1) == 0;
+}
+
 bapi_scene_t bapi_scene_create(const char *name, bapi_scene_callbacks_t callbacks)
 {
 	if (!name) return NULL;
@@ -12,7 +28,7 @@ bapi_scene_t bapi_scene_create(const char *name, bapi_scene_callbacks_t callback
 
 	strncpy(scene->name, name, MAX_NAME_LENGTH - 1);
 	scene->name[MAX_NAME_LENGTH - 1] = '\0';
-	scene->name_hash				 = bapi_hash_string(name);
+	scene->name_hash				 = hash_name(name);
 	scene->callbacks				 = callbacks;
 	scene->user_data				 = callbacks.user_data;
 	scene->is_active				 = 0;
@@ -80,12 +96,12 @@ int bapi_scene_manager_switch_scene(bapi_scene_manager_t manager, const char *na
 {
 	if (!manager || !name) return -1;
 
-	uint32_t	 target_hash = bapi_hash_string(name);
+	uint32_t	 target_hash = hash_name(name);
 	bapi_scene_t new_scene	 = NULL;
 
 	for (int i = 0; i < manager->scene_count; i++) {
 		if (manager->scenes[i]->name_hash == target_hash) {
-			if (strcmp(manager->scenes[i]->name, name) == 0) {
+			if (name_matches(manager->scenes[i]->name, name)) {
 				new_scene = manager->scenes[i];
 				break;
 			}
@@ -119,11 +135,11 @@ bapi_scene_t bapi_scene_manager_get_scene(bapi_scene_manager_t manager, const ch
 {
 	if (!manager || !name) return NULL;
 
-	uint32_t target_hash = bapi_hash_string(name);
+	uint32_t target_hash = hash_name(name);
 
 	for (int i = 0; i < manager->scene_count; i++) {
 		if (manager->scenes[i]->name_hash == target_hash) {
-			if (strcmp(manager->scenes[i]->name, name) == 0) {
+			if (name_matches(manager->scenes[i]->name, name)) {
 				return manager->scenes[i];
 			}
 		}

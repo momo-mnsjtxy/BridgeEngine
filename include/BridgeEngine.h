@@ -241,6 +241,10 @@ void bapi_fill_polygon(float cx, float cy, float radius, int sides, bapi_color_t
 void bapi_draw_image(const char *filepath, float x, float y, float w, float h);
 void bapi_draw_text(const char *text, float x, float y, float size, bapi_color_t color);
 void bapi_get_text_size(const char *text, float size, float *width, float *height);
+/* Legacy compatibility wrappers; `color` is 0xAARRGGBB packed as in bapi_color_from_hex(). */
+void bapi_engine_render_drawpixel(int x, int y, int color);
+void bapi_engine_render_fillrect(int x, int y, int width, int height, int color);
+void bapi_engine_render_draw_triangle(int x1, int y1, int x2, int y2, int x3, int y3, int color);
 void bapi_text_init(void);
 void bapi_text_cleanup(void);
 

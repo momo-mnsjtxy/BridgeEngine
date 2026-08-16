@@ -26,6 +26,44 @@ static int is_self_closing_tag(const char *line, const char *line_end)
 	return line_end > line && line_end[-1] == '/';
 }
 
+/* In-place XML entity decode; output is never longer than input. */
+static void decode_xml_entities(char *text)
+{
+	char *src = text;
+	char *dst = text;
+	while (*src) {
+		if (*src == '&') {
+			if (strncmp(src, "&amp;", 5) == 0) {
+				*dst++ = '&';
+				src += 5;
+				continue;
+			}
+			if (strncmp(src, "&lt;", 4) == 0) {
+				*dst++ = '<';
+				src += 4;
+				continue;
+			}
+			if (strncmp(src, "&gt;", 4) == 0) {
+				*dst++ = '>';
+				src += 4;
+				continue;
+			}
+			if (strncmp(src, "&quot;", 6) == 0) {
+				*dst++ = '"';
+				src += 6;
+				continue;
+			}
+			if (strncmp(src, "&apos;", 6) == 0) {
+				*dst++ = '\'';
+				src += 6;
+				continue;
+			}
+		}
+		*dst++ = *src++;
+	}
+	*dst = '\0';
+}
+
 static const char *get_attr_value_inline(const char *line_start, const char *line_end,
 										 const char *attr_name, char *value_out)
 {
@@ -60,6 +98,7 @@ static const char *get_attr_value_inline(const char *line_start, const char *lin
 			if (value_len >= MAX_ATTR_LENGTH) value_len = MAX_ATTR_LENGTH - 1;
 			memcpy(value_out, quote1 + 1, value_len);
 			value_out[value_len] = '\0';
+			decode_xml_entities(value_out);
 			return value_out;
 		}
 
@@ -88,6 +127,8 @@ static int get_tag_name(const char *line, char *tag_out)
 
 	const char *space	= find_char(start, ' ');
 	const char *tag_end = space && space < end ? space : end;
+	/* Accept self-closing tags written without a space, e.g. "<scene/>". */
+	if (tag_end > start && tag_end[-1] == '/') tag_end--;
 
 	int len = (int)(tag_end - start);
 	if (len >= MAX_ATTR_LENGTH) len = MAX_ATTR_LENGTH - 1;
@@ -170,6 +211,7 @@ bapi_level_manager_t bapi_level_manager_load_from_xml(const char *filepath)
 
 		if (strcmp(tag_name, "level") == 0) {
 			const char *line_end = find_char(line, '>');
+			level_index = 0;
 			if (line_end) {
 				char attr_value[MAX_ATTR_LENGTH];
 				if (get_attr_value_inline(line, line_end, "name", attr_value)) {
@@ -203,6 +245,19 @@ bapi_level_manager_t bapi_level_manager_load_from_xml(const char *filepath)
 	return manager;
 }
 
+static void fputs_xml_escaped(FILE *file, const char *text)
+{
+	for (const char *p = text; *p; p++) {
+		switch (*p) {
+		case '&': fputs("&amp;", file); break;
+		case '<': fputs("&lt;", file); break;
+		case '>': fputs("&gt;", file); break;
+		case '"': fputs("&quot;", file); break;
+		default: fputc(*p, file); break;
+		}
+	}
+}
+
 int bapi_scene_manager_save_to_xml(bapi_scene_manager_t manager, const char *filepath)
 {
 	if (!manager || !filepath) return -1;
@@ -215,7 +270,9 @@ int bapi_scene_manager_save_to_xml(bapi_scene_manager_t manager, const char *fil
 	for (int i = 0; i < bapi_scene_persistence_count(manager); i++) {
 		const char *name = bapi_scene_persistence_name(manager, i);
 		if (name) {
-			fprintf(file, "  <scene name=\"%s\" />\n", name);
+			fputs("  <scene name=\"", file);
+			fputs_xml_escaped(file, name);
+			fputs("\" />\n", file);
 		}
 	}
 
@@ -236,8 +293,9 @@ int bapi_level_manager_save_to_xml(bapi_level_manager_t manager, const char *fil
 	for (int i = 0; i < bapi_level_persistence_count(manager); i++) {
 		const char *name = bapi_level_persistence_name(manager, i);
 		if (name) {
-			fprintf(file, "  <level name=\"%s\" index=\"%d\" />\n", name,
-					bapi_level_persistence_index(manager, i));
+			fputs("  <level name=\"", file);
+			fputs_xml_escaped(file, name);
+			fprintf(file, "\" index=\"%d\" />\n", bapi_level_persistence_index(manager, i));
 		}
 	}
 

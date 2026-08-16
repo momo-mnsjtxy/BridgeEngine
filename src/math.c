@@ -64,7 +64,7 @@ float bapi_vec2_length_sq(bapi_vec2_t v)
 bapi_vec2_t bapi_vec2_normalize(bapi_vec2_t v)
 {
 	float len = bapi_vec2_length(v);
-	if (len < 0.00001f) {
+	if (!(len > 0.00001f)) {
 		bapi_vec2_t zero = {0, 0};
 		return zero;
 	}
@@ -175,6 +175,11 @@ int bapi_collision_aabb(bapi_rect_t a, bapi_rect_t b)
 
 float bapi_clamp(float value, float min, float max)
 {
+	if (min > max) {
+		float tmp = min;
+		min = max;
+		max = tmp;
+	}
 	if (value < min) return min;
 	if (value > max) return max;
 	return value;

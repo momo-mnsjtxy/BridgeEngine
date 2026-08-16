@@ -18,6 +18,7 @@ typedef struct {
 } cached_font_t;
 
 static cached_font_t g_font_cache[MAX_FONTS] = {0};
+static int			 g_font_evict_next;
 
 static plat_font_t get_or_load_font(float size)
 {
@@ -32,22 +33,33 @@ static plat_font_t get_or_load_font(float size)
 		}
 	}
 
+	int slot = -1;
 	for (int i = 0; i < MAX_FONTS; i++) {
 		if (!g_font_cache[i].in_use) {
-			const char *font_paths[] = {FONT_PATH_RUNTIME, FONT_PATH_SOURCE, FONT_PATH_LEGACY};
-			for (size_t path_index = 0; path_index < sizeof(font_paths) / sizeof(font_paths[0]);
-				 path_index++) {
-				g_font_cache[i].font = plat->text.open_font(font_paths[path_index], size);
-				if (g_font_cache[i].font) {
-					g_font_cache[i].size   = size;
-					g_font_cache[i].in_use = 1;
-					return g_font_cache[i].font;
-				}
-			}
-			return NULL;
+			slot = i;
+			break;
 		}
 	}
+	if (slot < 0) {
+		/* Cache is full: evict the oldest entry (round-robin) so rendering
+		 * at a new size keeps working instead of silently drawing nothing. */
+		slot = g_font_evict_next;
+		g_font_evict_next = (g_font_evict_next + 1) % MAX_FONTS;
+		plat->text.close_font(g_font_cache[slot].font);
+		g_font_cache[slot].font   = NULL;
+		g_font_cache[slot].in_use = 0;
+	}
 
+	const char *font_paths[] = {FONT_PATH_RUNTIME, FONT_PATH_SOURCE, FONT_PATH_LEGACY};
+	for (size_t path_index = 0; path_index < sizeof(font_paths) / sizeof(font_paths[0]);
+		 path_index++) {
+		g_font_cache[slot].font = plat->text.open_font(font_paths[path_index], size);
+		if (g_font_cache[slot].font) {
+			g_font_cache[slot].size   = size;
+			g_font_cache[slot].in_use = 1;
+			return g_font_cache[slot].font;
+		}
+	}
 	return NULL;
 }
 

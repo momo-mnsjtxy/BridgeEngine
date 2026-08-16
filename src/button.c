@@ -51,6 +51,9 @@ int bapi_button_update(bapi_button_t *button, const bapi_event_t *event)
 	}
 
 	const plat_interface_t *plat = plat_get();
+	if (plat == NULL) {
+		return 0;
+	}
 	float					mouse_x, mouse_y;
 	plat->window.get_mouse_state(&mouse_x, &mouse_y);
 
@@ -59,9 +62,13 @@ int bapi_button_update(bapi_button_t *button, const bapi_event_t *event)
 
 	button->is_hovered = inside;
 
-	if (bapi_event_is_mouse_button_down(event) && inside) {
+	/* Read the public event field directly: this translation unit is also
+	 * compiled standalone by the ui_xml test without init.c. */
+	int is_left_button = event->data.button.button == BAPI_BUTTON_LEFT;
+
+	if (bapi_event_is_mouse_button_down(event) && is_left_button && inside) {
 		button->is_clicked = 1;
-	} else if (bapi_event_is_mouse_button_up(event)) {
+	} else if (bapi_event_is_mouse_button_up(event) && is_left_button) {
 		int was_clicked	   = button->is_clicked;
 		button->is_clicked = 0;
 		return was_clicked && inside;

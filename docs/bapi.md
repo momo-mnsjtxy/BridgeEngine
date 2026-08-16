@@ -247,7 +247,8 @@ void bapi_texture_get_size(bapi_texture_t texture, int *w, int *h);
 bapi_texture_t bapi_texture_from_file(const char *filepath, int *out_w, int *out_h);
 ```
 从文件加载纹理并**按文件路径缓存**（最多 `BAPI_MAX_CACHED_TEXTURES` 个槽位）。命中缓存时返回
-同一句柄并增加引用计数；未命中则加载并写入缓存。`out_w`/`out_h` 可为 `NULL`，返回纹理尺寸。
+同一句柄并增加引用计数；未命中则加载并写入缓存。缓存满时淘汰最早入缓存的条目（被淘汰的纹理
+在仍有外部引用时保持可用，只是不再命中缓存）。`out_w`/`out_h` 可为 `NULL`，返回纹理尺寸。
 `filepath` 为空或加载失败返回 `NULL`。
 
 ```c
@@ -405,7 +406,8 @@ int bapi_is_mouse_button_down(int button);
 int bapi_is_mouse_button_pressed(int button);
 int bapi_is_mouse_button_released(int button);
 ```
-与按键语义一致。`button` 用 `BAPI_BUTTON_LEFT`（值为 1）等。
+与按键语义一致。`button` 用 `BAPI_BUTTON_LEFT`（值为 1）等。鼠标按键状态按位独立跟踪，
+多个按键同时按下时分别上报。
 
 ```c
 float bapi_get_mouse_x(void);
@@ -427,7 +429,9 @@ void bapi_camera_set_rotation(bapi_camera_t *cam, float angle_rad);
 void bapi_camera_set_viewport(bapi_camera_t *cam, float w, float h);
 ```
 `init` 把摄像机放在原点、缩放 1、无旋转。`move` 是相对移动，`set_position` 是绝对定位。旋转单位
-为弧度。所有函数要求 `cam` 非 `NULL`（不检查）。
+为弧度。所有函数要求 `cam` 非 `NULL`（不检查）。`zoom` 必须为正：`set_zoom` 会拒绝非正值（保持
+原值不变），若直接修改字段导致 `zoom <= 0`，`screen_to_world` 返回摄像机位置、
+`get_view_rect` 返回零矩形，避免除零产生 inf/NaN。
 
 ```c
 void bapi_camera_world_to_screen(bapi_camera_t *cam, float wx, float wy, float *sx, float *sy);
@@ -450,7 +454,9 @@ void bapi_scene_destroy(bapi_scene_t scene);
 ```
 创建/销毁场景。`name` 不能为 `NULL`，用于按名字查找和 XML 持久化。`callbacks` 含
 `on_enter`/`on_exit`/`on_update`/`on_render` 四个可选回调和一个 `user_data`（非空时会被写入场景）。
-`bapi_scene_destroy` 只释放场景本身，不释放 manager。
+`bapi_scene_destroy` 只释放场景本身，不释放 manager。**所有权**：场景加入 manager
+（`bapi_scene_manager_add_scene`）后归 manager 所有，`bapi_scene_manager_destroy` 会统一释放；
+不要在已注册后直接调用 `bapi_scene_destroy`，否则 manager 中留下悬垂指针并导致双重释放。
 
 ```c
 const char *bapi_scene_get_name(bapi_scene_t scene);
@@ -497,6 +503,8 @@ void bapi_level_destroy(bapi_level_t level);
 ```
 创建/销毁关卡。`name` 不能为 `NULL`。`index` 是逻辑关卡序号，用于按序号导航（0-255 内有效）。
 `callbacks` 结构与场景一致（`on_load`/`on_unload`/`on_update`/`on_render` + `user_data`）。
+**所有权**：与场景相同，关卡加入 manager 后归 manager 所有，不要在已注册后直接调用
+`bapi_level_destroy`。
 
 ```c
 const char *bapi_level_get_name(bapi_level_t level);

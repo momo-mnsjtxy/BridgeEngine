@@ -21,7 +21,9 @@ void bapi_camera_move(bapi_camera_t* cam, float dx, float dy) {
 }
 
 void bapi_camera_set_zoom(bapi_camera_t* cam, float zoom) {
-    cam->zoom = zoom;
+    if (zoom > 0.0f) {
+        cam->zoom = zoom;
+    }
 }
 
 void bapi_camera_set_rotation(bapi_camera_t* cam, float angle_rad) {
@@ -51,6 +53,11 @@ void bapi_camera_world_to_screen(bapi_camera_t* cam, float wx, float wy, float* 
 }
 
 void bapi_camera_screen_to_world(bapi_camera_t* cam, float sx, float sy, float* wx, float* wy) {
+    if (!(cam->zoom > 0.0f)) {
+        if (wx) *wx = cam->x;
+        if (wy) *wy = cam->y;
+        return;
+    }
     float rx = (sx - cam->viewport_w * 0.5f) / cam->zoom;
     float ry = (sy - cam->viewport_h * 0.5f) / cam->zoom;
 
@@ -80,6 +87,13 @@ bapi_vec2_t bapi_camera_screen_to_world_v(bapi_camera_t* cam, bapi_vec2_t screen
 }
 
 void bapi_camera_get_view_rect(bapi_camera_t* cam, bapi_rect_t* out_rect) {
+    if (!(cam->zoom > 0.0f)) {
+        out_rect->x = cam->x;
+        out_rect->y = cam->y;
+        out_rect->w = 0;
+        out_rect->h = 0;
+        return;
+    }
     float half_w = cam->viewport_w * 0.5f / cam->zoom;
     float half_h = cam->viewport_h * 0.5f / cam->zoom;
     out_rect->x = cam->x - half_w;
