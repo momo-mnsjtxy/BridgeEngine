@@ -27,7 +27,7 @@
 // Create a directory (and any missing parents). Returns 0 on success.
 static int make_dir(const char *path)
 {
-	char tmp[MAX_PATH];
+	char tmp[4096];
 	snprintf(tmp, sizeof(tmp), "%s", path);
 	size_t len = strlen(tmp);
 	// first pass: ensure the path ends cleanly, then walk separators

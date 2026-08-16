@@ -24,6 +24,16 @@ static char *trim(char *value)
 	return start;
 }
 
+// Portable strdup (not a C standard function; avoids feature-test macros).
+static char *copy_str(const char *value)
+{
+	if (!value) return NULL;
+	size_t len = strlen(value);
+	char  *copy = malloc(len + 1);
+	if (copy) memcpy(copy, value, len + 1);
+	return copy;
+}
+
 // Parse .bep contents held in a NUL-terminated buffer. Returns a project or
 // NULL. `buf` is borrowed (not freed); document strings are duplicated.
 static bapi_project_t parse_bep_buffer(const char *buf)
@@ -58,7 +68,7 @@ static bapi_project_t parse_bep_buffer(const char *buf)
 					return NULL;
 				}
 				project->documents = grown;
-				project->documents[project->document_count] = strdup(value);
+				project->documents[project->document_count] = copy_str(value);
 				if (!project->documents[project->document_count]) {
 					free(line);
 					bapi_project_destroy(project);
@@ -73,10 +83,10 @@ static bapi_project_t parse_bep_buffer(const char *buf)
 					char *data	= trim(equals + 1);
 					if (strcmp(key, "name") == 0) {
 						free(project->name);
-						project->name = strdup(data);
+						project->name = copy_str(data);
 					} else if (strcmp(key, "engine") == 0) {
 						free(project->engine);
-						project->engine = strdup(data);
+						project->engine = copy_str(data);
 					}
 				}
 			}
