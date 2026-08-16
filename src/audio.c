@@ -157,25 +157,24 @@ void bapi_audio_cleanup(void)
 	}
 }
 
-bapi_sound_t bapi_sound_load(const char *filepath)
+static bapi_sound_t sound_from_pcm(plat_audio_spec_t *spec, uint8_t *buffer, uint32_t length)
 {
-	const plat_interface_t *plat = plat_get();
-	if (!audio_is_supported() || plat->audio.load_wav == NULL) {
-		warn_audio_unsupported_once(plat);
-		return NULL;
-	}
-
 	bapi_sound_t sound = malloc(sizeof(struct bapi_sound_internal));
 	if (sound == NULL) {
+		if (buffer != NULL) {
+			const plat_interface_t *plat = plat_get();
+			if (plat != NULL && plat->audio.mem_free != NULL) {
+				plat->audio.mem_free(buffer);
+			} else {
+				free(buffer);
+			}
+		}
 		return NULL;
 	}
 
-	memset(&sound->spec, 0, sizeof(plat_audio_spec_t));
-	if (plat->audio.load_wav(filepath, &sound->spec, &sound->buffer, &sound->length) != 0) {
-		printf("[AUDIO] Failed to load WAV %s\n", filepath);
-		free(sound);
-		return NULL;
-	}
+	memcpy(&sound->spec, spec, sizeof(plat_audio_spec_t));
+	sound->buffer = buffer;
+	sound->length = length;
 
 	printf("[AUDIO] Loaded WAV: channels=%d, freq=%d, length=%u\n", sound->spec.channels,
 		   sound->spec.freq, sound->length);
@@ -189,6 +188,71 @@ bapi_sound_t bapi_sound_load(const char *filepath)
 	sound->next_allocated = allocated_sounds;
 	allocated_sounds = sound;
 	return sound;
+}
+
+bapi_sound_t bapi_sound_load(const char *filepath)
+{
+	const plat_interface_t *plat = plat_get();
+	if (!audio_is_supported()) {
+		warn_audio_unsupported_once(plat);
+		return NULL;
+	}
+
+	if (!filepath) return NULL;
+
+	plat_audio_spec_t spec;
+	uint8_t			 *buffer = NULL;
+	uint32_t		  length = 0;
+
+	memset(&spec, 0, sizeof(spec));
+	if (plat->io.open_read && plat->io.read && plat->audio.load_wav_mem) {
+		/* Two-stage load: read the file into memory, decode from memory. */
+		size_t	 size = 0;
+		uint8_t *data = bapi_file_read_alloc(filepath, &size);
+		if (!data) {
+			printf("[AUDIO] Failed to read WAV file %s\n", filepath);
+			return NULL;
+		}
+		int result = plat->audio.load_wav_mem(data, size, &spec, &buffer, &length);
+		free(data);
+		if (result != 0) {
+			printf("[AUDIO] Failed to load WAV %s\n", filepath);
+			return NULL;
+		}
+	} else if (plat->audio.load_wav) {
+		if (plat->audio.load_wav(filepath, &spec, &buffer, &length) != 0) {
+			printf("[AUDIO] Failed to load WAV %s\n", filepath);
+			return NULL;
+		}
+	} else {
+		warn_audio_unsupported_once(plat);
+		return NULL;
+	}
+
+	return sound_from_pcm(&spec, buffer, length);
+}
+
+bapi_sound_t bapi_sound_load_from_memory(const void *data, size_t size)
+{
+	const plat_interface_t *plat = plat_get();
+	if (!audio_is_supported() || plat->audio.load_wav_mem == NULL) {
+		warn_audio_unsupported_once(plat);
+		return NULL;
+	}
+
+	if (!data || size == 0) return NULL;
+
+	plat_audio_spec_t spec;
+	uint8_t			 *buffer = NULL;
+	uint32_t		  length = 0;
+
+	memset(&spec, 0, sizeof(spec));
+	if (plat->audio.load_wav_mem(data, size, &spec, &buffer, &length) != 0) {
+		printf("[AUDIO] Failed to decode WAV from memory\n");
+		return NULL;
+	}
+
+	return sound_from_pcm(&spec, buffer, length);
 }
 
 int bapi_sound_play(bapi_sound_t sound)

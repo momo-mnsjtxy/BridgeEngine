@@ -53,6 +53,7 @@ typedef struct {
 	void (*destroy_texture)(plat_texture_t texture);
 
 	plat_surface_t *(*load_image)(const char *filepath);
+	plat_surface_t *(*load_image_mem)(const void *data, size_t size);
 	void (*destroy_surface)(plat_surface_t *surface);
 } plat_texture_api_t;
 
@@ -82,6 +83,8 @@ typedef struct {
 	void (*resume_audio_stream_device)(plat_audio_stream_t stream);
 	int (*load_wav)(const char *filepath, plat_audio_spec_t *spec, uint8_t **buffer,
 					uint32_t *length);
+	int (*load_wav_mem)(const void *data, size_t size, plat_audio_spec_t *spec, uint8_t **buffer,
+						uint32_t *length);
 	void (*mem_free)(void *ptr);
 } plat_audio_api_t;
 

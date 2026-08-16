@@ -389,11 +389,8 @@ static void sdl3_destroy_texture(plat_texture_t texture)
 	}
 }
 
-static plat_surface_t *sdl3_load_image(const char *filepath)
+static plat_surface_t *sdl3_image_from_io(SDL_IOStream *io)
 {
-	if (!filepath) return NULL;
-	SDL_IOStream *io = SDL_IOFromFile(filepath, "rb");
-	if (!io) return NULL;
 	plat_surface_t *s = malloc(sizeof(plat_surface_t));
 	if (!s) {
 		SDL_CloseIO(io);
@@ -405,6 +402,22 @@ static plat_surface_t *sdl3_load_image(const char *filepath)
 		return NULL;
 	}
 	return s;
+}
+
+static plat_surface_t *sdl3_load_image(const char *filepath)
+{
+	if (!filepath) return NULL;
+	SDL_IOStream *io = SDL_IOFromFile(filepath, "rb");
+	if (!io) return NULL;
+	return sdl3_image_from_io(io);
+}
+
+static plat_surface_t *sdl3_load_image_mem(const void *data, size_t size)
+{
+	if (!data || size == 0) return NULL;
+	SDL_IOStream *io = SDL_IOFromConstMem(data, size);
+	if (!io) return NULL;
+	return sdl3_image_from_io(io);
 }
 
 static void sdl3_destroy_surface(plat_surface_t *surface)
@@ -641,12 +654,9 @@ static void sdl3_resume_audio_stream_device(plat_audio_stream_t stream)
 	if (stream) SDL_ResumeAudioStreamDevice(stream->stream);
 }
 
-static int sdl3_load_wav(const char *filepath, plat_audio_spec_t *spec, uint8_t **buffer,
-						 uint32_t *length)
+static int sdl3_wav_from_io(SDL_IOStream *io, plat_audio_spec_t *spec, uint8_t **buffer,
+							uint32_t *length)
 {
-	if (!spec || !filepath) return -1;
-	SDL_IOStream *io = SDL_IOFromFile(filepath, "rb");
-	if (!io) return -1;
 	SDL_AudioSpec sdl_spec;
 	SDL_zero(sdl_spec);
 	uint8_t *wav_buffer;
@@ -681,6 +691,24 @@ static int sdl3_load_wav(const char *filepath, plat_audio_spec_t *spec, uint8_t 
 	spec->channels = sdl_spec.channels;
 	spec->freq	   = sdl_spec.freq;
 	return 0;
+}
+
+static int sdl3_load_wav(const char *filepath, plat_audio_spec_t *spec, uint8_t **buffer,
+						 uint32_t *length)
+{
+	if (!spec || !filepath) return -1;
+	SDL_IOStream *io = SDL_IOFromFile(filepath, "rb");
+	if (!io) return -1;
+	return sdl3_wav_from_io(io, spec, buffer, length);
+}
+
+static int sdl3_load_wav_mem(const void *data, size_t size, plat_audio_spec_t *spec,
+							 uint8_t **buffer, uint32_t *length)
+{
+	if (!spec || !data || size == 0) return -1;
+	SDL_IOStream *io = SDL_IOFromConstMem(data, size);
+	if (!io) return -1;
+	return sdl3_wav_from_io(io, spec, buffer, length);
 }
 
 static void sdl3_mem_free(void *ptr)
@@ -861,6 +889,7 @@ static const plat_interface_t sdl3_interface = {
 			.get_texture_size			 = sdl3_get_texture_size,
 			.destroy_texture			 = sdl3_destroy_texture,
 			.load_image					 = sdl3_load_image,
+			.load_image_mem				 = sdl3_load_image_mem,
 			.destroy_surface			 = sdl3_destroy_surface,
 		},
 	.text =
@@ -887,6 +916,7 @@ static const plat_interface_t sdl3_interface = {
 			.set_audio_stream_gain		= sdl3_set_audio_stream_gain,
 			.resume_audio_stream_device = sdl3_resume_audio_stream_device,
 			.load_wav					= sdl3_load_wav,
+			.load_wav_mem				= sdl3_load_wav_mem,
 			.mem_free					= sdl3_mem_free,
 		},
 	.sync =

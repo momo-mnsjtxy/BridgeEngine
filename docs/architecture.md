@@ -23,6 +23,14 @@ BridgeEngine 保持公开 BAPI 稳定，并将平台相关实现隔离在 `src/i
 
 资源包读取（`src/pack.c`）不经过平台层，直接封装 `thirdparty/rzip/rz_lib.c`（C99，仅依赖标准库），仅桌面端编译；XJ380 使用 `src/pack_stub.c`，所有 `bapi_pack_*` 返回失败并记录一次 warning（rz_lib 依赖 POSIX `sys/stat.h`/`fseeko` 等，XJ380 freestanding 环境不可用）。
 
+## 媒体加载（两段式）
+
+媒体加载统一为两段式流程：先把字节从磁盘（`bapi_file_read_alloc`，经平台 `io` 能力组）或资源包（`bapi_pack_read_file_alloc` / `bapi_pack_stream_*`）取到内存，再从内存解码。平台 vtable 为此新增两个槽位：`plat_texture_api_t.load_image_mem` 与 `plat_audio_api_t.load_wav_mem`（SDL3 经 `SDL_IOFromConstMem` 实现；XJ380 保持 `NULL` 槽位即不支持）。
+
+- `bapi_sound_load` / `bapi_texture_load` 在平台同时提供 `io` 与内存解码槽位时走两段式路径，否则回退到原路径加载（保证 XJ380 延迟 GPU 图片加载等旧行为不变）。
+- 视频通过引擎内部的 `video_source_t`（read/seek/size/close 回调）把三种字节源喂给 FFmpeg AVIO：磁盘文件（平台 `plat_io_t`）、内存拷贝（`bapi_video_load_from_memory`，视频自持）、包条目流（`bapi_video_load_from_pack_stream`，随用随读，不全量缓冲）。`bapi_video_load` 保持磁盘流式语义。
+- 两套接口并存：全量缓冲套（`*_load_from_pack`、`*_load_from_memory`，`src/resource.c` 组合）与流式套（`bapi_pack_stream_*` + `bapi_video_load_from_pack_stream`），由调用方按内存/性能取舍选择。
+
 ## 文字后端
 
 桌面 SDL3 后端通过 SDL3_ttf 和 BAPI 文字函数加载、绘制字体。运行时优先从 `assets/text/font.ttf` 加载字体；从源码树直接运行示例时，会回退到 `examples/assets/text/font.ttf`，最后兼容旧项目的 `text/font.ttf`。

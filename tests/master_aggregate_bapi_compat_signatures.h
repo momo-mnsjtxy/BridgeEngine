@@ -112,4 +112,18 @@
 	X(bapi_scene_manager_load_from_xml, bapi_scene_manager_t (*)(const char *)) \
 	X(bapi_level_manager_load_from_xml, bapi_level_manager_t (*)(const char *)) \
 	X(bapi_scene_manager_save_to_xml, int (*)(bapi_scene_manager_t, const char *)) \
-	X(bapi_level_manager_save_to_xml, int (*)(bapi_level_manager_t, const char *))
+	X(bapi_level_manager_save_to_xml, int (*)(bapi_level_manager_t, const char *)) \
+	X(bapi_file_read_alloc, uint8_t *(*)(const char *, size_t *)) \
+	X(bapi_pack_stream_open, bapi_pack_stream_t (*)(bapi_pack_t, const char *)) \
+	X(bapi_pack_stream_read, size_t (*)(bapi_pack_stream_t, void *, size_t)) \
+	X(bapi_pack_stream_seek, int64_t (*)(bapi_pack_stream_t, int64_t, int)) \
+	X(bapi_pack_stream_tell, int64_t (*)(bapi_pack_stream_t)) \
+	X(bapi_pack_stream_size, int64_t (*)(bapi_pack_stream_t)) \
+	X(bapi_pack_stream_close, void (*)(bapi_pack_stream_t)) \
+	X(bapi_sound_load_from_memory, bapi_sound_t (*)(const void *, size_t)) \
+	X(bapi_sound_load_from_pack, bapi_sound_t (*)(bapi_pack_t, const char *)) \
+	X(bapi_texture_load_from_memory, bapi_texture_t (*)(const void *, size_t)) \
+	X(bapi_texture_load_from_pack, bapi_texture_t (*)(bapi_pack_t, const char *)) \
+	X(bapi_video_load_from_memory, bapi_video_t (*)(const void *, size_t)) \
+	X(bapi_video_load_from_pack, bapi_video_t (*)(bapi_pack_t, const char *)) \
+	X(bapi_video_load_from_pack_stream, bapi_video_t (*)(bapi_pack_t, const char *))

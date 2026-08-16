@@ -1,6 +1,8 @@
 #include "BridgeEngine.h"
 #include "rz_lib.h"
 #include <limits.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -37,9 +39,10 @@ static rz_file_t *pack_find_node(bapi_pack_t pack, const char *name)
 	return NULL;
 }
 
-/* Copy up to `capacity` bytes of the entry's stored data into `dest` in
- * bounded chunks; returns the number of bytes copied (partial on I/O error). */
-static size_t pack_copy_file(rz_file_t *node, uint8_t *dest, size_t capacity)
+/* Copy up to `capacity` bytes of the entry's stored data starting at `offset`
+ * into `dest` in bounded chunks; returns the number of bytes copied (partial
+ * on I/O error). */
+static size_t pack_copy_file(rz_file_t *node, uint64_t offset, uint8_t *dest, size_t capacity)
 {
 	uint64_t total = rz_get_file_comp_size(node);
 	uint64_t want	= total < (uint64_t)capacity ? total : (uint64_t)capacity;
@@ -48,12 +51,12 @@ static size_t pack_copy_file(rz_file_t *node, uint8_t *dest, size_t capacity)
 	while (done < want) {
 		/* rz_read_file() takes a `long` offset; on LLP64 platforms entries
 		 * past LONG_MAX bytes are not addressable through it, so stop there. */
-		if ((uint64_t)done > (uint64_t)LONG_MAX) break;
+		if (offset > (uint64_t)LONG_MAX || done > (uint64_t)LONG_MAX - offset) break;
 
 		size_t chunk = (size_t)(want - done);
 		if (chunk > PACK_READ_CHUNK) chunk = PACK_READ_CHUNK;
 
-		uint8_t *part = rz_read_file(node, (long)done, (int)chunk);
+		uint8_t *part = rz_read_file(node, (long)(offset + done), (int)chunk);
 		if (!part) break;
 		memcpy(dest + done, part, chunk);
 		free(part);
@@ -135,7 +138,7 @@ size_t bapi_pack_read_file(bapi_pack_t pack, const char *name, void *buffer, siz
 	if (!pack || !name || !buffer || buffer_size == 0) return 0;
 	rz_file_t *node = pack_find_node(pack, name);
 	if (!node) return 0;
-	return pack_copy_file(node, (uint8_t *)buffer, buffer_size);
+	return pack_copy_file(node, 0, (uint8_t *)buffer, buffer_size);
 }
 
 uint8_t *bapi_pack_read_file_alloc(bapi_pack_t pack, const char *name, size_t *out_size)
@@ -150,7 +153,7 @@ uint8_t *bapi_pack_read_file_alloc(bapi_pack_t pack, const char *name, size_t *o
 	uint8_t *buffer = (uint8_t *)malloc(size > 0 ? (size_t)size : 1);
 	if (!buffer) return NULL;
 
-	size_t got = pack_copy_file(node, buffer, (size_t)size);
+	size_t got = pack_copy_file(node, 0, buffer, (size_t)size);
 	if (got != (size_t)size) {
 		free(buffer);
 		return NULL;
@@ -158,4 +161,85 @@ uint8_t *bapi_pack_read_file_alloc(bapi_pack_t pack, const char *name, size_t *o
 
 	if (out_size) *out_size = (size_t)size;
 	return buffer;
+}
+
+struct bapi_pack_stream_internal {
+	bapi_pack_t pack;
+	rz_file_t  *node;
+	uint64_t	pos;
+};
+
+bapi_pack_stream_t bapi_pack_stream_open(bapi_pack_t pack, const char *name)
+{
+	rz_file_t *node = pack_find_node(pack, name);
+	if (!node) return NULL;
+
+	bapi_pack_stream_t stream =
+		(bapi_pack_stream_t)malloc(sizeof(struct bapi_pack_stream_internal));
+	if (!stream) return NULL;
+
+	stream->pack = pack;
+	stream->node = node;
+	stream->pos	 = 0;
+	return stream;
+}
+
+size_t bapi_pack_stream_read(bapi_pack_stream_t stream, void *buffer, size_t size)
+{
+	if (!stream || !buffer || size == 0) return 0;
+
+	uint64_t total = rz_get_file_comp_size(stream->node);
+	if (stream->pos >= total) return 0;
+
+	uint64_t remaining = total - stream->pos;
+	uint64_t want	   = remaining < (uint64_t)size ? remaining : (uint64_t)size;
+	size_t	 got	   = pack_copy_file(stream->node, stream->pos, (uint8_t *)buffer, (size_t)want);
+	stream->pos += got;
+	return got;
+}
+
+int64_t bapi_pack_stream_seek(bapi_pack_stream_t stream, int64_t offset, int whence)
+{
+	if (!stream || (whence != SEEK_SET && whence != SEEK_CUR && whence != SEEK_END)) return -1;
+
+	uint64_t size = rz_get_file_comp_size(stream->node);
+	uint64_t base;
+	if (whence == SEEK_SET) {
+		base = 0;
+	} else if (whence == SEEK_CUR) {
+		base = stream->pos;
+	} else {
+		base = size;
+	}
+
+	uint64_t target;
+	if (offset < 0) {
+		uint64_t magnitude = (uint64_t)(-(offset + 1)) + 1;
+		target			   = magnitude <= base ? base - magnitude : 0;
+	} else if (base > UINT64_MAX - (uint64_t)offset) {
+		target = size; /* overflow: clamp to end */
+	} else {
+		target = base + (uint64_t)offset;
+		if (target > size) target = size;
+	}
+
+	stream->pos = target;
+	return (int64_t)target;
+}
+
+int64_t bapi_pack_stream_tell(bapi_pack_stream_t stream)
+{
+	if (!stream) return -1;
+	return (int64_t)stream->pos;
+}
+
+int64_t bapi_pack_stream_size(bapi_pack_stream_t stream)
+{
+	if (!stream) return -1;
+	return (int64_t)rz_get_file_comp_size(stream->node);
+}
+
+void bapi_pack_stream_close(bapi_pack_stream_t stream)
+{
+	free(stream);
 }
