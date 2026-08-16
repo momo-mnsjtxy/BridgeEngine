@@ -737,6 +737,231 @@ private:
 	int					 new_index_;
 };
 
+// ---------------------------------------------------------------------------
+// Group / Ungroup: create a PANEL container that groups a set of components.
+// The container's rect is the union of the members; members are reparented
+// into it while keeping their absolute rects (PANEL is not a layout container,
+// so geometry is unchanged). Ungroup moves members back to their old parents.
+// ---------------------------------------------------------------------------
+
+class GroupCmd : public Command {
+public:
+	GroupCmd(bapi_ui_t ui, const std::vector<bapi_ui_component_t> &members)
+		: ui_(ui), members_(members)
+	{
+		// find a unique container id
+		int suffix = 1;
+		char id[64];
+		for (;;) {
+			snprintf(id, sizeof(id), "group_%d", suffix);
+			if (bapi_ui_find(ui, id) == nullptr) break;
+			suffix++;
+		}
+		container_id_ = id;
+		group_		   = true;
+		for (bapi_ui_component_t m : members_) {
+			if (!m) continue;
+			Entry e;
+			e.comp	 = m;
+			e.parent = bapi_ui_component_get_parent(m);
+			e.index	 = child_index(e.parent, m);
+			entries_.push_back(e);
+		}
+	}
+
+	void Execute(EditorState &state) override
+	{
+		(void)state;
+		if (group_) {
+			container_ = bapi_ui_component_create(BAPI_UI_COMPONENT_PANEL, container_id_.c_str());
+			if (!container_) return;
+			// union rect of members
+			bapi_rect_t box = {0, 0, 0, 0};
+			bool	   first = true;
+			for (const Entry &e : entries_) {
+				bapi_rect_t r;
+				bapi_ui_component_get_rect(e.comp, &r);
+				if (first) {
+					box.x = r.x;
+					box.y = r.y;
+					box.w = r.w;
+					box.h = r.h;
+					first = false;
+				} else {
+					float x1 = std::min(box.x, r.x);
+					float y1 = std::min(box.y, r.y);
+					float x2 = std::max(box.x + box.w, r.x + r.w);
+					float y2 = std::max(box.y + box.h, r.y + r.h);
+					box.x	 = x1;
+					box.y	 = y1;
+					box.w	 = x2 - x1;
+					box.h	 = y2 - y1;
+				}
+			}
+			// group lives at the first member's parent (or root)
+			bapi_ui_component_t host = entries_.empty() ? nullptr : entries_[0].parent;
+			if (host)
+				bapi_ui_component_add_child(host, container_);
+			else
+				bapi_ui_add_root(ui_, container_);
+			bapi_ui_component_set_rect(container_, box);
+			// reparent members into the container preserving z-order
+			for (Entry &e : entries_) {
+				detach(e.comp, e.parent);
+				bapi_ui_component_add_child(container_, e.comp);
+			}
+		} else {
+			// ungroup: move members back to old parents, drop the container
+			for (Entry &e : entries_) {
+				detach(e.comp, container_);
+				attach(e.comp, e.parent, e.index);
+			}
+			if (container_) {
+				if (bapi_ui_component_get_parent(container_))
+					bapi_ui_component_remove(container_);
+				else
+					bapi_ui_remove_root(ui_, container_);
+				bapi_ui_component_destroy(container_);
+				container_ = nullptr;
+			}
+		}
+		push_layout(state);
+	}
+
+	void Undo(EditorState &state) override
+	{
+		(void)state;
+		if (group_) {
+			for (Entry &e : entries_) {
+				detach(e.comp, container_);
+				attach(e.comp, e.parent, e.index);
+			}
+			if (container_) {
+				if (bapi_ui_component_get_parent(container_))
+					bapi_ui_component_remove(container_);
+				else
+					bapi_ui_remove_root(ui_, container_);
+				bapi_ui_component_destroy(container_);
+				container_ = nullptr;
+			}
+		} else {
+			if (!container_) {
+				container_ = bapi_ui_component_create(BAPI_UI_COMPONENT_PANEL, container_id_.c_str());
+				if (!container_) return;
+				bapi_ui_component_t host = entries_.empty() ? nullptr : entries_[0].parent;
+				if (host)
+					bapi_ui_component_add_child(host, container_);
+				else
+					bapi_ui_add_root(ui_, container_);
+			}
+			for (Entry &e : entries_) {
+				detach(e.comp, e.parent);
+				bapi_ui_component_add_child(container_, e.comp);
+			}
+		}
+		push_layout(state);
+	}
+
+	const char *Name() const override { return group_ ? "Group Components" : "Ungroup"; }
+
+	// toggle between grouped / ungrouped for the second operation direction
+	void SetUngroup()
+	{
+		group_ = false;
+		// store the container so undo of ungroup can re-create it
+		container_ = entries_.empty() ? nullptr : bapi_ui_component_get_parent(entries_[0].comp);
+	}
+
+private:
+	static int child_index(bapi_ui_component_t parent, bapi_ui_component_t comp)
+	{
+		if (!parent) return -1;
+		int count = bapi_ui_component_get_child_count(parent);
+		for (int i = 0; i < count; i++)
+			if (bapi_ui_component_get_child(parent, i) == comp) return i;
+		return -1;
+	}
+
+	void detach(bapi_ui_component_t comp, bapi_ui_component_t parent)
+	{
+		if (!comp) return;
+		if (parent) {
+			bapi_ui_component_remove(comp);
+		} else {
+			bapi_ui_remove_root(ui_, comp);
+		}
+	}
+
+	void attach(bapi_ui_component_t comp, bapi_ui_component_t parent, int index)
+	{
+		if (!comp) return;
+		if (parent) {
+			if (bapi_ui_component_insert_child(parent, comp, index) != 0)
+				bapi_ui_component_add_child(parent, comp);
+		} else {
+			bapi_ui_add_root(ui_, comp);
+		}
+	}
+
+	struct Entry {
+		bapi_ui_component_t comp = nullptr;
+		bapi_ui_component_t parent = nullptr;
+		int					index = -1;
+	};
+
+	bapi_ui_t							  ui_;
+	std::vector<bapi_ui_component_t>	  members_;
+	std::vector<Entry>					  entries_;
+	std::string							  container_id_;
+	bapi_ui_component_t					  container_ = nullptr;
+	bool								  group_	   = true;
+};
+
+void EditorGroupSelection(EditorState &state)
+{
+	if (state.selection_list.size() < 2 || !state.ui) return;
+	std::vector<bapi_ui_component_t> members;
+	for (bapi_ui_component_t comp : state.selection_list)
+		if (comp) members.push_back(comp);
+	if (members.size() < 2) return;
+	// a group container must not already be one of the selected components
+	for (bapi_ui_component_t m : members) {
+		if (bapi_ui_component_get_type(m) == BAPI_UI_COMPONENT_PANEL &&
+			EditorComponentId(m) && strncmp(EditorComponentId(m), "group_", 6) == 0)
+			return;
+	}
+	EditorPushCommand(state, std::make_unique<GroupCmd>(state.ui, members));
+}
+
+void EditorUngroupSelection(EditorState &state)
+{
+	if (state.selection_list.empty() || !state.ui) return;
+	std::vector<bapi_ui_component_t> groups;
+	for (bapi_ui_component_t comp : state.selection_list) {
+		if (!comp) continue;
+		if (bapi_ui_component_get_type(comp) != BAPI_UI_COMPONENT_PANEL) continue;
+		const char *id = EditorComponentId(comp);
+		if (!id || strncmp(id, "group_", 6) != 0) continue;
+		groups.push_back(comp);
+	}
+	if (groups.empty()) return;
+	std::vector<bapi_ui_component_t> members;
+	for (bapi_ui_component_t g : groups) {
+		int n = bapi_ui_component_get_child_count(g);
+		for (int i = 0; i < n; i++) {
+			bapi_ui_component_t child = bapi_ui_component_get_child(g, i);
+			if (child) members.push_back(child);
+		}
+	}
+	if (members.empty()) return;
+	auto cmd = std::make_unique<GroupCmd>(state.ui, members);
+	cmd->SetUngroup();
+	EditorPushCommand(state, std::move(cmd));
+	// select the former members after ungrouping
+	state.selection_list = members;
+	state.selection = members.empty() ? nullptr : members.back();
+}
+
 class CloneCmd : public Command {
 public:
 	CloneCmd(bapi_ui_t ui, ComponentOwnerPtr owner, bapi_ui_component_t parent)
@@ -891,11 +1116,33 @@ void EditorCloneComponent(EditorState &state, bapi_ui_component_t source, bapi_u
 	EditorPushCommand(state, std::make_unique<CloneCmd>(state.ui, owner, parent));
 }
 
+// Clone an arbitrary (possibly off-tree) source component into the document
+// with an explicit base id. Used by the template loader.
+bapi_ui_component_t EditorInsertClone(EditorState &state, bapi_ui_component_t source,
+									  bapi_ui_component_t parent, const char *preferred_id)
+{
+	if (!source || !state.ui) return nullptr;
+	const char *base = preferred_id && preferred_id[0] ? preferred_id
+													  : bapi_ui_component_get_id(source);
+	std::string new_id = unique_id(state, base ? base : "component");
+	bapi_ui_component_t clone = bapi_ui_component_clone(source);
+	if (!clone) return nullptr;
+	if (bapi_ui_component_set_id(clone, new_id.c_str()) != 0) {
+		bapi_ui_component_destroy(clone);
+		return nullptr;
+	}
+	auto owner = std::make_shared<ComponentOwner>();
+	owner->comp = clone;
+	EditorPushCommand(state, std::make_unique<CloneCmd>(state.ui, owner, parent));
+	return clone;
+}
+
 void EditorDuplicateSelection(EditorState &state)
 {
 	if (state.selection_list.empty() || !state.ui) return;
 	std::vector<bapi_ui_component_t> sources = state.selection_list;
 	for (bapi_ui_component_t comp : sources) {
+		if (!comp || state.locked.count(comp)) continue;
 		if (comp_in_list(sources, bapi_ui_component_get_parent(comp))) continue;
 		bapi_ui_component_t parent = bapi_ui_component_get_parent(comp);
 		EditorCloneComponent(state, comp, parent);
@@ -980,6 +1227,82 @@ void EditorReorderComponent(EditorState &state, bapi_ui_component_t comp, Reorde
 {
 	if (!comp || !state.ui) return;
 	EditorPushCommand(state, std::make_unique<ReorderCmd>(state.ui, comp, op));
+}
+
+// ---------------------------------------------------------------------------
+// distribute + uniform size (uses the primary selection as reference/order)
+// ---------------------------------------------------------------------------
+
+void EditorDistributeSelection(EditorState &state, const char *axis)
+{
+	if (state.selection_list.size() < 3 || !state.selection) return;
+	std::vector<bapi_ui_component_t> comps;
+	for (bapi_ui_component_t c : state.selection_list)
+		if (c) comps.push_back(c);
+	if (comps.size() < 3) return;
+
+	bool horizontal = strcmp(axis, "h") == 0;
+	// sort by current position along the axis
+	std::sort(comps.begin(), comps.end(), [&](bapi_ui_component_t a, bapi_ui_component_t b) {
+		bapi_rect_t ra, rb;
+		bapi_ui_component_get_rect(a, &ra);
+		bapi_ui_component_get_rect(b, &rb);
+		return horizontal ? (ra.x < rb.x) : (ra.y < rb.y);
+	});
+
+	bapi_rect_t first_rect, last_rect;
+	bapi_ui_component_get_rect(comps.front(), &first_rect);
+	bapi_ui_component_get_rect(comps.back(), &last_rect);
+	float span_start, span_end;
+	float total_extent = 0.0f;
+	for (bapi_ui_component_t c : comps) {
+		bapi_rect_t r;
+		bapi_ui_component_get_rect(c, &r);
+		total_extent += horizontal ? r.w : r.h;
+	}
+	if (horizontal) {
+		span_start = first_rect.x;
+		span_end	= last_rect.x + last_rect.w;
+	} else {
+		span_start = first_rect.y;
+		span_end	= last_rect.y + last_rect.h;
+	}
+	float gap = (span_end - span_start - total_extent) / (float)(comps.size() - 1);
+	if (gap < 0.0f) gap = 0.0f;
+
+	float cursor = span_start;
+	for (size_t i = 0; i < comps.size(); i++) {
+		bapi_rect_t rect;
+		bapi_ui_component_get_rect(comps[i], &rect);
+		bapi_rect_t old_rect = rect;
+		if (horizontal)
+			rect.x = cursor;
+		else
+			rect.y = cursor;
+		if (rect.x != old_rect.x || rect.y != old_rect.y)
+			EditorPushCommand(state, std::make_unique<SetRectCmd>(comps[i], old_rect, rect));
+		cursor += (horizontal ? rect.w : rect.h) + gap;
+	}
+}
+
+void EditorMakeSameSize(EditorState &state, const char *mode)
+{
+	if (state.selection_list.size() < 2 || !state.selection) return;
+	bapi_ui_component_t ref = state.selection;
+	bapi_rect_t			ref_rect;
+	bapi_ui_component_get_rect(ref, &ref_rect);
+	bool same_w = strchr(mode, 'w') != nullptr;
+	bool same_h = strchr(mode, 'h') != nullptr;
+	for (bapi_ui_component_t comp : state.selection_list) {
+		if (!comp || comp == ref) continue;
+		bapi_rect_t rect;
+		bapi_ui_component_get_rect(comp, &rect);
+		bapi_rect_t old_rect = rect;
+		if (same_w) rect.w = ref_rect.w;
+		if (same_h) rect.h = ref_rect.h;
+		if (rect.w != old_rect.w || rect.h != old_rect.h)
+			EditorPushCommand(state, std::make_unique<SetRectCmd>(comp, old_rect, rect));
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -1085,7 +1408,7 @@ void EditorRemoveComponents(EditorState &state, const std::vector<bapi_ui_compon
 {
 	std::vector<bapi_ui_component_t> to_remove;
 	for (bapi_ui_component_t comp : comps)
-		if (comp) to_remove.push_back(comp);
+		if (comp && !state.locked.count(comp)) to_remove.push_back(comp);
 	if (to_remove.empty()) return;
 	// drop any component whose ancestor is also being removed
 	std::vector<bapi_ui_component_t> top;
@@ -1293,6 +1616,56 @@ void EditorSetComponentEnabled(EditorState &state, bapi_ui_component_t comp, boo
 	bool old_value = bapi_ui_component_is_enabled(comp) != 0;
 	if (old_value == new_value) return;
 	EditorPushCommand(state, std::make_unique<SetBoolCmd>(comp, BoolField::Enabled, old_value, new_value));
+}
+
+// ---------------------------------------------------------------------------
+// layer state (editor-only, not persisted)
+// ---------------------------------------------------------------------------
+
+bool EditorIsLocked(const EditorState &state, bapi_ui_component_t comp)
+{
+	return comp && state.locked.count(comp) != 0;
+}
+
+bool EditorIsEditorHidden(const EditorState &state, bapi_ui_component_t comp)
+{
+	return comp && state.editor_hidden.count(comp) != 0;
+}
+
+void EditorSetLocked(EditorState &state, bapi_ui_component_t comp, bool locked)
+{
+	if (!comp) return;
+	if (locked)
+		state.locked.insert(comp);
+	else
+		state.locked.erase(comp);
+}
+
+void EditorSetEditorHidden(EditorState &state, bapi_ui_component_t comp, bool hidden)
+{
+	if (!comp) return;
+	if (hidden)
+		state.editor_hidden.insert(comp);
+	else
+		state.editor_hidden.erase(comp);
+}
+
+void EditorToggleLocked(EditorState &state, const std::vector<bapi_ui_component_t> &comps)
+{
+	if (comps.empty()) return;
+	bool any_locked = false;
+	for (bapi_ui_component_t comp : comps)
+		if (EditorIsLocked(state, comp)) any_locked = true;
+	for (bapi_ui_component_t comp : comps) EditorSetLocked(state, comp, !any_locked);
+}
+
+void EditorToggleEditorHidden(EditorState &state, const std::vector<bapi_ui_component_t> &comps)
+{
+	if (comps.empty()) return;
+	bool any_hidden = false;
+	for (bapi_ui_component_t comp : comps)
+		if (EditorIsEditorHidden(state, comp)) any_hidden = true;
+	for (bapi_ui_component_t comp : comps) EditorSetEditorHidden(state, comp, !any_hidden);
 }
 
 // ---------------------------------------------------------------------------

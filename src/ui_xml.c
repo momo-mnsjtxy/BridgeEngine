@@ -439,32 +439,13 @@ static bapi_ui_component_t parse_component(ui_parser_t *parser, ui_tag_t *openin
 	return component;
 }
 
-bapi_ui_t bapi_ui_load_from_xml(const char *filepath)
+static bapi_ui_t parse_ui_buffer(const char *xml, const char *base_dir)
 {
-	FILE *file;
-	long  size;
-	char *xml;
-	if (!filepath || !filepath[0] || !(file = fopen(filepath, "rb"))) return NULL;
-	fseek(file, 0, SEEK_END);
-	size = ftell(file);
-	fseek(file, 0, SEEK_SET);
-	if (size < 0 || !(xml = malloc((size_t)size + 1))) {
-		fclose(file);
-		return NULL;
-	}
-	if (fread(xml, 1, (size_t)size, file) != (size_t)size) {
-		fclose(file);
-		free(xml);
-		return NULL;
-	}
-	xml[size] = '\0';
-	fclose(file);
-	char	   *base_dir	= path_dirname(filepath);
 	bapi_ui_t	ui			= bapi_ui_create();
 	ui_parser_t parser		= {xml, base_dir, ui, 0};
 	ui_tag_t	root		= {0};
 	int			root_parsed = 0;
-	if (!base_dir || !ui || next_tag(&parser, &root) != 1 || root.closing ||
+	if (!ui || next_tag(&parser, &root) != 1 || root.closing ||
 		strcmp(root.name, "ui") != 0)
 		parser.failed = 1;
 	else
@@ -499,6 +480,33 @@ bapi_ui_t bapi_ui_load_from_xml(const char *filepath)
 		bapi_ui_destroy(ui);
 		ui = NULL;
 	}
+	return ui;
+}
+
+bapi_ui_t bapi_ui_load_from_xml(const char *filepath)
+{
+	if (!filepath || !filepath[0]) return NULL;
+
+	FILE *file;
+	long  size;
+	char *xml;
+	if (!(file = fopen(filepath, "rb"))) return NULL;
+	fseek(file, 0, SEEK_END);
+	size = ftell(file);
+	fseek(file, 0, SEEK_SET);
+	if (size < 0 || !(xml = malloc((size_t)size + 1))) {
+		fclose(file);
+		return NULL;
+	}
+	if (fread(xml, 1, (size_t)size, file) != (size_t)size) {
+		fclose(file);
+		free(xml);
+		return NULL;
+	}
+	xml[size] = '\0';
+	fclose(file);
+	char	   *base_dir = path_dirname(filepath);
+	bapi_ui_t	ui		   = base_dir ? parse_ui_buffer(xml, base_dir) : NULL;
 	free(base_dir);
 	free(xml);
 	return ui;
@@ -575,53 +583,110 @@ static const char *ui_tag_name(bapi_ui_component_type_t type)
 }
 
 typedef struct {
-	FILE *file;
+	char   *buf;
+	size_t  len;
+	size_t  cap;
 	int	  indent;
 	int	  failed;
 } ui_writer_t;
 
-static int color_equals(bapi_color_t a, bapi_color_t b)
+static void ui_write_reserve(ui_writer_t *w, size_t extra)
 {
-	return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+	if (w->failed || w->len + extra + 1 <= w->cap) return;
+	size_t new_cap = w->cap ? w->cap * 2 : 4096;
+	while (new_cap < w->len + extra + 1) new_cap *= 2;
+	char *nbuf = realloc(w->buf, new_cap);
+	if (!nbuf) {
+		w->failed = 1;
+		return;
+	}
+	w->buf = nbuf;
+	w->cap = new_cap;
+}
+
+static void ui_write_raw(ui_writer_t *w, const char *s, size_t n)
+{
+	ui_write_reserve(w, n);
+	if (w->failed) return;
+	memcpy(w->buf + w->len, s, n);
+	w->len += n;
+	w->buf[w->len] = '\0';
+}
+
+static void ui_write_str(ui_writer_t *w, const char *s)
+{
+	if (s) ui_write_raw(w, s, strlen(s));
+}
+
+static void ui_write_fmt(ui_writer_t *w, const char *fmt, ...)
+{
+	char	 small[512];
+	va_list ap;
+	va_start(ap, fmt);
+	va_list copy;
+	va_copy(copy, ap);
+	int need = vsnprintf(small, sizeof(small), fmt, ap);
+	va_end(ap);
+	if (need < 0) {
+		va_end(copy);
+		w->failed = 1;
+		return;
+	}
+	if ((size_t)need < sizeof(small)) {
+		ui_write_raw(w, small, (size_t)need);
+	} else {
+		char *big = malloc((size_t)need + 1);
+		if (!big) {
+			va_end(copy);
+			w->failed = 1;
+			return;
+		}
+		vsnprintf(big, (size_t)need + 1, fmt, copy);
+		va_end(copy);
+		ui_write_raw(w, big, (size_t)need);
+		free(big);
+	}
 }
 
 static void ui_write_indent(ui_writer_t *w)
 {
-	for (int i = 0; i < w->indent; i++) fputs("  ", w->file);
+	for (int i = 0; i < w->indent; i++) ui_write_str(w, "  ");
 }
 
 static void ui_write_attr_encoded(ui_writer_t *w, const char *name, const char *value)
 {
-	fprintf(w->file, " %s=\"", name);
+	ui_write_str(w, " ");
+	ui_write_str(w, name);
+	ui_write_str(w, "=\"");
 	for (const char *cursor = value; *cursor; cursor++) {
 		switch (*cursor) {
 		case '&':
-			fputs("&amp;", w->file);
+			ui_write_str(w, "&amp;");
 			break;
 		case '<':
-			fputs("&lt;", w->file);
+			ui_write_str(w, "&lt;");
 			break;
 		case '>':
-			fputs("&gt;", w->file);
+			ui_write_str(w, "&gt;");
 			break;
 		case '"':
-			fputs("&quot;", w->file);
+			ui_write_str(w, "&quot;");
 			break;
 		case '\'':
-			fputs("&apos;", w->file);
+			ui_write_str(w, "&apos;");
 			break;
 		default:
-			fputc(*cursor, w->file);
+			ui_write_raw(w, cursor, 1);
 			break;
 		}
 	}
-	fputs("\"", w->file);
+	ui_write_str(w, "\"");
 }
 
 static void ui_write_float_attr(ui_writer_t *w, const char *name, float value)
 {
 	if (value == (float)(int)value) {
-		fprintf(w->file, " %s=\"%d\"", name, (int)value);
+		ui_write_fmt(w, " %s=\"%d\"", name, (int)value);
 		return;
 	}
 	char buffer[64];
@@ -630,17 +695,22 @@ static void ui_write_float_attr(ui_writer_t *w, const char *name, float value)
 	while (len > 0 && buffer[len - 1] == '0') len--;
 	if (len > 0 && buffer[len - 1] == '.') len--;
 	buffer[len] = '\0';
-	fprintf(w->file, " %s=\"%s\"", name, buffer);
+	ui_write_fmt(w, " %s=\"%s\"", name, buffer);
 }
 
 static void ui_write_int_attr(ui_writer_t *w, const char *name, int value)
 {
-	fprintf(w->file, " %s=\"%d\"", name, value);
+	ui_write_fmt(w, " %s=\"%d\"", name, value);
 }
 
 static void ui_write_color_attr(ui_writer_t *w, const char *name, bapi_color_t color)
 {
-	fprintf(w->file, " %s=\"#%02X%02X%02X%02X\"", name, color.r, color.g, color.b, color.a);
+	ui_write_fmt(w, " %s=\"#%02X%02X%02X%02X\"", name, color.r, color.g, color.b, color.a);
+}
+
+static int color_equals(bapi_color_t a, bapi_color_t b)
+{
+	return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
 }
 
 static void ui_write_component(ui_writer_t *w, bapi_ui_component_t component)
@@ -651,15 +721,15 @@ static void ui_write_component(ui_writer_t *w, bapi_ui_component_t component)
 		return;
 	}
 	ui_write_indent(w);
-	fprintf(w->file, "<%s", tag);
-	fprintf(w->file, " id=\"%s\"", component->id);
+	ui_write_fmt(w, "<%s", tag);
+	ui_write_fmt(w, " id=\"%s\"", component->id);
 	ui_write_float_attr(w, "x", component->local_rect.x);
 	ui_write_float_attr(w, "y", component->local_rect.y);
 	ui_write_float_attr(w, "w", component->local_rect.w);
 	ui_write_float_attr(w, "h", component->local_rect.h);
-	if (!component->visible) fputs(" visible=\"false\"", w->file);
-	if (!component->enabled) fputs(" enabled=\"false\"", w->file);
-	if (component->relative_position) fputs(" relative=\"true\"", w->file);
+	if (!component->visible) ui_write_str(w, " visible=\"false\"");
+	if (!component->enabled) ui_write_str(w, " enabled=\"false\"");
+	if (component->relative_position) ui_write_str(w, " relative=\"true\"");
 	if (component->text && component->text[0]) ui_write_attr_encoded(w, "text", component->text);
 	if (component->text_size != 18.0f)
 		ui_write_float_attr(w, component->type == BAPI_UI_COMPONENT_BUTTON ? "text_size" : "size",
@@ -671,7 +741,7 @@ static void ui_write_component(ui_writer_t *w, bapi_ui_component_t component)
 	if (component->item_count != 0) ui_write_int_attr(w, "items", component->item_count);
 	if (component->max_text_length != 256)
 		ui_write_int_attr(w, "max_length", component->max_text_length);
-	if (component->checked) fputs(" checked=\"true\"", w->file);
+	if (component->checked) ui_write_str(w, " checked=\"true\"");
 	if (component->type == BAPI_UI_COMPONENT_PROGRESS ||
 		component->type == BAPI_UI_COMPONENT_SLIDER) {
 		ui_write_float_attr(w, "value", component->value);
@@ -701,27 +771,163 @@ static void ui_write_component(ui_writer_t *w, bapi_ui_component_t component)
 	if (component->src_raw && component->src_raw[0])
 		ui_write_attr_encoded(w, "src", component->src_raw);
 	if (component->child_count > 0) {
-		fputs(">\n", w->file);
+		ui_write_str(w, ">\n");
 		w->indent++;
 		for (int i = 0; i < component->child_count; i++)
 			ui_write_component(w, component->children[i]);
 		w->indent--;
 		ui_write_indent(w);
-		fprintf(w->file, "</%s>\n", tag);
+		ui_write_fmt(w, "</%s>\n", tag);
 	} else {
-		fputs(" />\n", w->file);
+		ui_write_str(w, " />\n");
 	}
+}
+
+// Serialize a UI into a freshly malloc'd NUL-terminated XML string.
+static char *ui_serialize_to_memory(bapi_ui_t ui)
+{
+	if (!ui) return NULL;
+	ui_writer_t w = {NULL, 0, 0, 0, 0};
+	ui_write_str(&w, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ui>\n");
+	if (!w.failed)
+		for (int i = 0; i < ui->root_count; i++) ui_write_component(&w, ui->roots[i]);
+	if (!w.failed) ui_write_str(&w, "</ui>\n");
+	if (w.failed || !w.buf) {
+		free(w.buf);
+		return NULL;
+	}
+	return w.buf;
 }
 
 int bapi_ui_save_to_xml(bapi_ui_t ui, const char *filepath)
 {
 	if (!ui || !filepath) return -1;
+	char *xml = ui_serialize_to_memory(ui);
+	if (!xml) return -1;
 	FILE *file = fopen(filepath, "wb");
-	if (!file) return -1;
-	ui_writer_t w = {file, 0, 0};
-	fputs("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ui>\n", file);
-	for (int i = 0; i < ui->root_count; i++) ui_write_component(&w, ui->roots[i]);
-	fputs("</ui>\n", file);
+	if (!file) {
+		free(xml);
+		return -1;
+	}
+	size_t len = strlen(xml);
+	size_t written = fwrite(xml, 1, len, file);
 	fclose(file);
-	return w.failed ? -1 : 0;
+	free(xml);
+	return written == len ? 0 : -1;
+}
+
+// ---------------------------------------------------------------------------
+// .uix encrypted UI documents
+//
+// The byte-level encryption/decryption lives in src/ui_crypt.c; here we only
+// bridge the UI object to those helpers. Layout and behaviour are documented
+// in BridgeEngine.h next to bapi_ui_load_from_file / bapi_ui_save_to_file.
+// ---------------------------------------------------------------------------
+
+int bapi_ui_save_to_file(bapi_ui_t ui, const char *filepath, const char *key)
+{
+	if (!ui || !filepath || !filepath[0]) return -1;
+	if (!key || !key[0]) return bapi_ui_save_to_xml(ui, filepath);
+
+	char *xml = ui_serialize_to_memory(ui);
+	if (!xml) return -1;
+	size_t len = strlen(xml);
+
+	unsigned char *payload;
+	size_t		   payload_len;
+	if (bapi_uix_encrypt_mem(key, (const unsigned char *)xml, len, &payload, &payload_len) != 0) {
+		free(xml);
+		return -1;
+	}
+	free(xml);
+
+	FILE *f = fopen(filepath, "wb");
+	if (!f) {
+		free(payload);
+		return -1;
+	}
+	int ok = fwrite(payload, 1, payload_len, f) == payload_len;
+	fclose(f);
+	free(payload);
+	return ok ? 0 : -1;
+}
+
+// Parse UI from raw file bytes (may be plain XML or encrypted .uix), resolving
+// src-relative paths against `base_dir`. Returns a ui or NULL.
+static bapi_ui_t load_ui_from_bytes(const unsigned char *data, size_t size, const char *key,
+									const char *base_dir)
+{
+	if (!data || size == 0) return NULL;
+
+	// Plain XML: only allowed when no key is expected.
+	if (!bapi_uix_is_encrypted_mem(data, size)) {
+		if (key && key[0]) return NULL;
+		char *xml = malloc(size + 1);
+		if (!xml) return NULL;
+		memcpy(xml, data, size);
+		xml[size] = '\0';
+		bapi_ui_t ui = base_dir ? parse_ui_buffer(xml, base_dir) : NULL;
+		free(xml);
+		return ui;
+	}
+	if (!key || !key[0]) {
+		return NULL; // encrypted file requires a key
+	}
+
+	unsigned char *plain;
+	size_t		   plain_len;
+	if (bapi_uix_decrypt_mem(key, data, size, &plain, &plain_len) != 0) {
+		return NULL; // wrong key or tampered file
+	}
+
+	char *xml = malloc(plain_len + 1);
+	if (!xml) {
+		free(plain);
+		return NULL;
+	}
+	memcpy(xml, plain, plain_len);
+	xml[plain_len] = '\0';
+	free(plain);
+
+	bapi_ui_t ui = base_dir ? parse_ui_buffer(xml, base_dir) : NULL;
+	free(xml);
+	return ui;
+}
+
+bapi_ui_t bapi_ui_load_from_file(const char *filepath, const char *key)
+{
+	if (!filepath || !filepath[0]) return NULL;
+	char *base_dir = path_dirname(filepath);
+
+	FILE *file = fopen(filepath, "rb");
+	if (!file) {
+		free(base_dir);
+		return NULL;
+	}
+	fseek(file, 0, SEEK_END);
+	long size = ftell(file);
+	fseek(file, 0, SEEK_SET);
+	if (size < 0) {
+		fclose(file);
+		free(base_dir);
+		return NULL;
+	}
+	unsigned char *data = malloc((size_t)size ? (size_t)size : 1);
+	if (!data) {
+		fclose(file);
+		free(base_dir);
+		return NULL;
+	}
+	if (size > 0 && fread(data, 1, (size_t)size, file) != (size_t)size) {
+		free(data);
+		fclose(file);
+		free(base_dir);
+		return NULL;
+	}
+	fclose(file);
+
+	bapi_ui_t ui = load_ui_from_bytes(data, (size_t)size, key, base_dir);
+	free(data);
+	free(base_dir);
+	return ui;
 }

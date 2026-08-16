@@ -70,13 +70,17 @@ using ComponentOwnerPtr = std::shared_ptr<ComponentOwner>;
 	float marquee_cur_y = 0.0f;
 
 	std::unordered_map<bapi_ui_component_t, ComponentOwnerPtr> owner_registry;
-	std::vector<ComponentOwnerPtr> clipboard;
 
 	// scene management (M4): the root panel that is currently "the scene", and
 	// roots skipped by scene switches (kept as-is, e.g. always-on HUD). Both
 	// are editor-only state and are not persisted into the XML.
 	bapi_ui_component_t active_scene = nullptr;
 	std::unordered_set<bapi_ui_component_t> persistent_roots;
+
+	// layer management: components that are locked (view not editable) or
+	// editor-hidden. Both are editor-only and never written to the XML.
+	std::unordered_set<bapi_ui_component_t> locked;
+	std::unordered_set<bapi_ui_component_t> editor_hidden;
 };
 
 // Pending "save changes?" confirmation (M3-C2 dirty intercept).
@@ -122,6 +126,11 @@ struct EditorState {
 	float drag_start_mouse_y = 0.0f;
 	bool dragging = false;
 
+	// smart-snap guide lines shown while dragging, in doc coordinates
+	// (transient, cleared each frame): x/y of vertical/horizontal lines.
+	std::vector<float> snap_guides_v;
+	std::vector<float> snap_guides_h;
+
 	// resize-in-progress state
 	int resize_handle = -1; // 0..7, -1 = none
 	bool resizing = false;
@@ -136,16 +145,32 @@ struct EditorState {
 	// ownership registry for components shared between Add/Remove commands
 	std::unordered_map<bapi_ui_component_t, ComponentOwnerPtr> owner_registry;
 
-	// clipboard holds detached master clones for Copy/Paste
+	// clipboard holds detached master clones for Copy/Paste. It is global to
+	// EditorState (not per Document) so a component copied in one document can
+	// be pasted into another.
 	std::vector<ComponentOwnerPtr> clipboard;
 
 	// scene management (M4): active root panel + roots skipped on scene switch
 	bapi_ui_component_t active_scene = nullptr;
 	std::unordered_set<bapi_ui_component_t> persistent_roots;
 
+	// layer management (editor-only, never persisted)
+	std::unordered_set<bapi_ui_component_t> locked;
+	std::unordered_set<bapi_ui_component_t> editor_hidden;
+
+	// hierarchy panel search + reveal
+	char search_query[128] = {};
+	bapi_ui_component_t reveal_request = nullptr;
+
 	// multi-document (M3-C): every open document, plus the active index
 	std::vector<std::unique_ptr<Document>> documents;
 	int active_doc = -1;
+
+	// When a document is activated programmatically (open/new/project), ImGui's
+	// tab bar must be told which tab to select. Holding the target index here
+	// makes the Documents panel pass SetSelected to exactly that tab for one
+	// frame; -1 means "no pending selection request".
+	int tab_select_request = -1;
 
 	// pending "save?" confirmation state
 	PendingAction pending_action = PendingAction::None;
@@ -158,6 +183,13 @@ struct EditorState {
 	std::string project_path;
 	std::string project_engine;
 	bool show_welcome = true;
+
+	// optional encryption key for .uix UI documents. Empty means documents are
+	// saved/loaded as plain XML. When set, saves write encrypted .uix files and
+	// loads require the key.
+	char ui_key[64] = {};
+	bool key_dialog_open = false;
+	char key_dialog_buf[64] = {};
 
 	// preview panel camera: <= 0 = auto-fit to window, > 0 = manual zoom
 	float preview_scale = 0.0f;
@@ -211,6 +243,8 @@ bool EditorOpenProject(EditorState &state, const char *path, std::string &error_
 void EditorPushRecentProject(EditorState &state, const char *path);
 void EditorLoadRecentProjects(EditorState &state);
 void EditorSaveRecentProjects(EditorState &state);
+// Write/remove <project>/.uixkey from the current UI key (build-time encryption).
+void EditorSyncUiKeyFile(EditorState &state);
 std::string EditorDocumentTitle(const EditorState &state, int index);
 bool EditorDocumentIsDirty(const EditorState &state, int index);
 const std::string &EditorDocumentPath(const EditorState &state, int index);
@@ -275,11 +309,18 @@ void EditorSetComponentRadius(EditorState &state, bapi_ui_component_t comp, floa
 void EditorSetComponentChecked(EditorState &state, bapi_ui_component_t comp, bool new_value);
 void EditorSetComponentRelative(EditorState &state, bapi_ui_component_t comp, bool new_value);
 void EditorSetComponentVisible(EditorState &state, bapi_ui_component_t comp, bool new_value);
-void EditorSetComponentEnabled(EditorState &state, bapi_ui_component_t comp, bool new_value);
+// editor-only layer state (not persisted to XML): lock and editor-hide
+void EditorSetLocked(EditorState &state, bapi_ui_component_t comp, bool locked);
+void EditorSetEditorHidden(EditorState &state, bapi_ui_component_t comp, bool hidden);
+bool EditorIsLocked(const EditorState &state, bapi_ui_component_t comp);
+bool EditorIsEditorHidden(const EditorState &state, bapi_ui_component_t comp);
+void EditorToggleLocked(EditorState &state, const std::vector<bapi_ui_component_t> &comps);
+void EditorToggleEditorHidden(EditorState &state, const std::vector<bapi_ui_component_t> &comps);void EditorSetComponentEnabled(EditorState &state, bapi_ui_component_t comp, bool new_value);
 void EditorSetComponentSrc(EditorState &state, bapi_ui_component_t comp, const char *new_src);
 
 // panels
 void EditorMenuPanel(EditorState &state);
+void EditorKeyDialog(EditorState &state);
 void EditorDocumentsPanel(EditorState &state);
 void EditorToolbarPanel(EditorState &state);
 void EditorViewportPanel(EditorState &state);
@@ -290,6 +331,10 @@ void EditorPropertiesPanel(EditorState &state);
 void EditorScenesPanel(EditorState &state);
 void EditorWelcomePanel(EditorState &state);
 void EditorNewProjectDialog(EditorState &state);
+
+// shared right-click context menu; returns true if it consumed the click.
+// comps is the set to operate on (may be the selection).
+void EditorContextMenu(EditorState &state, const std::vector<bapi_ui_component_t> &comps);
 
 // viewport interaction helpers
 void EditorSetViewCamera(EditorState &state, float scale, float offset_x, float offset_y);
@@ -314,8 +359,14 @@ std::vector<bapi_ui_component_t> EditorBoxSelect(EditorState &state, bapi_rect_t
 // tree editing helpers
 void EditorReparentComponent(EditorState &state, bapi_ui_component_t comp, bapi_ui_component_t new_parent);
 void EditorCloneComponent(EditorState &state, bapi_ui_component_t source, bapi_ui_component_t parent);
+bapi_ui_component_t EditorInsertClone(EditorState &state, bapi_ui_component_t source,
+									  bapi_ui_component_t parent, const char *preferred_id);
 void EditorDuplicateSelection(EditorState &state);
 void EditorAlignSelection(EditorState &state, const char *align);
+void EditorDistributeSelection(EditorState &state, const char *axis);
+void EditorMakeSameSize(EditorState &state, const char *mode);
+void EditorGroupSelection(EditorState &state);
+void EditorUngroupSelection(EditorState &state);
 void EditorCopySelection(EditorState &state);
 void EditorPasteClipboard(EditorState &state);
 void EditorCutSelection(EditorState &state);
@@ -338,5 +389,12 @@ bool EditorCanStopRun(const EditorState &state);
 void EditorStopRunProject(EditorState &state);
 void EditorBuildOutputPanel(EditorState &state);
 void EditorUpdateBuildThread(EditorState &state);
+void EditorUndoPanel(EditorState &state);
+
+// template / preset library
+std::string EditorTemplateDir(const EditorState &state);
+bool EditorSaveTemplate(EditorState &state, const char *filepath);
+bool EditorLoadTemplate(EditorState &state, const char *filepath);
+std::vector<std::string> EditorListTemplates(const EditorState &state);
 
 bool EditorIsAncestor(bapi_ui_component_t node, bapi_ui_component_t candidate);

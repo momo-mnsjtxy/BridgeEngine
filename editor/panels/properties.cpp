@@ -71,6 +71,53 @@ static void rect_editor(EditorState &state, bapi_ui_component_t comp)
 	}
 }
 
+// Anchor presets for relative-positioned children. Computes a rect in the
+// parent's local space (offset from parent origin, same size preserved unless
+// "Fill" is chosen).
+static void anchor_editor(EditorState &state, bapi_ui_component_t comp)
+{
+	bapi_ui_component_t parent = bapi_ui_component_get_parent(comp);
+	if (!parent || !bapi_ui_component_get_relative(comp)) return;
+
+	bapi_rect_t pr, cr;
+	bapi_ui_component_get_rect(parent, &pr);
+	bapi_ui_component_get_rect(comp, &cr);
+
+	struct Anchor {
+		const char *label;
+		float		x, y, w, h;
+		bool		use_wh;
+	};
+	const float pw = pr.w, ph = pr.h;
+	const float cw = cr.w, ch = cr.h;
+	Anchor anchors[] = {
+		{"Fill", 0.0f, 0.0f, pw, ph, true},
+		{"Top-Left", 0.0f, 0.0f, cw, ch, false},
+		{"Top-Center", (pw - cw) * 0.5f, 0.0f, cw, ch, false},
+		{"Top-Right", pw - cw, 0.0f, cw, ch, false},
+		{"Mid-Left", 0.0f, (ph - ch) * 0.5f, cw, ch, false},
+		{"Center", (pw - cw) * 0.5f, (ph - ch) * 0.5f, cw, ch, false},
+		{"Mid-Right", pw - cw, (ph - ch) * 0.5f, cw, ch, false},
+		{"Bottom-Left", 0.0f, ph - ch, cw, ch, false},
+		{"Bottom-Center", (pw - cw) * 0.5f, ph - ch, cw, ch, false},
+		{"Bottom-Right", pw - cw, ph - ch, cw, ch, false},
+	};
+
+	ImGui::TextUnformatted("Anchors (relative to parent)");
+	for (int i = 0; i < (int)(sizeof(anchors) / sizeof(anchors[0])); i++) {
+		if (i > 0 && i % 3 != 0) ImGui::SameLine();
+		if (ImGui::Button(anchors[i].label)) {
+			bapi_rect_t next;
+			next.x = anchors[i].x;
+			next.y = anchors[i].y;
+			next.w = anchors[i].use_wh ? anchors[i].w : cr.w;
+			next.h = anchors[i].use_wh ? anchors[i].h : cr.h;
+			EditorSetComponentRect(state, comp, next);
+		}
+	}
+	ImGui::TextDisabled("Offsets are relative to the parent's top-left.");
+}
+
 static void bool_editor(EditorState &state, bapi_ui_component_t comp, const char *label, BoolField field,
 						bool value)
 {
@@ -325,6 +372,7 @@ void EditorPropertiesPanel(EditorState &state)
 				bapi_ui_component_is_enabled(comp) != 0);
 	bool_editor(state, comp, "Relative", BoolField::Relative,
 				bapi_ui_component_get_relative(comp) != 0);
+	anchor_editor(state, comp);
 
 	ImGui::Separator();
 	ImGui::TextUnformatted("Type Specific");

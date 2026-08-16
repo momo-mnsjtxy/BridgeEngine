@@ -139,6 +139,7 @@ void EditorPreviewPanel(EditorState &state)
 			SDL_SetRenderDrawColor(renderer, 28, 28, 32, 255);
 			SDL_RenderClear(renderer);
 			// engine: screen = (doc + offset) * scale  =>  doc top-left -> (0,0)
+			bapi_ui_layout(state.ui);
 			bapi_ui_render_ex(state.ui, -minx, -miny, scale);
 			SDL_SetRenderTarget(renderer, prev_target);
 		}

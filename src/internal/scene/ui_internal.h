@@ -57,3 +57,11 @@ bapi_ui_component_t bapi_ui_component_create(bapi_ui_component_type_t type, cons
 void				bapi_ui_component_destroy(bapi_ui_component_t component);
 int bapi_ui_component_add_child(bapi_ui_component_t parent, bapi_ui_component_t child);
 int bapi_ui_add_root(bapi_ui_t ui, bapi_ui_component_t component);
+
+// .uix byte-level helpers (src/ui_crypt.c), shared by src/ui_xml.c and the
+// build-time encryptor tool. Not part of the public BAPI surface.
+int bapi_uix_encrypt_mem(const char *key, const unsigned char *plain, size_t len,
+						 unsigned char **out, size_t *out_len);
+int bapi_uix_decrypt_mem(const char *key, const unsigned char *data, size_t len,
+						 unsigned char **out, size_t *out_len);
+int bapi_uix_is_encrypted_mem(const unsigned char *data, size_t len);

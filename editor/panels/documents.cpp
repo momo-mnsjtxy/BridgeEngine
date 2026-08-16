@@ -95,10 +95,20 @@ void EditorDocumentsPanel(EditorState &state)
 				ImGuiTabBarFlags_FittingPolicyScroll)) {
 		for (int i = 0; i < (int)state.documents.size(); i++) {
 			bool open			  = true;
+			// Only programmatic activation (open/new/project) may force the
+			// selection. Passing SetSelected every frame overrides a click on a
+			// lower-index tab, so the user could never switch back. ImGui's own
+			// click handling selects the clicked tab; we then follow below.
 			ImGuiTabItemFlags flags =
-				(i == state.active_doc) ? ImGuiTabItemFlags_SetSelected : 0;
+				(state.tab_select_request == i) ? ImGuiTabItemFlags_SetSelected : 0;
+			// The display title changes with the dirty flag ("*"), so a plain
+			// label would be treated as a new tab on every dirty toggle. Keep a
+			// stable hidden id ("##doc_<i>") so ImGui tracks one tab per index.
 			std::string title = EditorDocumentTitle(state, i);
-			if (ImGui::BeginTabItem(title.c_str(), &open, flags)) {
+			std::string label = title + "##doc_" + std::to_string(i);
+			if (ImGui::BeginTabItem(label.c_str(), &open, flags)) {
+				// This tab is the one ImGui currently considers selected.
+				// Sync the active document with it (user click or reorder).
 				if (i != state.active_doc) EditorActivateDocument(state, i);
 				ImGui::EndTabItem();
 			}
@@ -106,6 +116,8 @@ void EditorDocumentsPanel(EditorState &state)
 		}
 		ImGui::EndTabBar();
 	}
+	// Consume the one-shot selection request now that it has been applied.
+	state.tab_select_request = -1;
 
 	ImGui::TextDisabled("%s", L("Drag components from the palette or use File > Open to add documents."));
 	ImGui::End();

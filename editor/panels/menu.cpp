@@ -104,6 +104,12 @@ static void file_menu(EditorState &state)
 			state.build_log += "save project: " + error + "\n";
 		}
 	}
+	if (ImGui::MenuItem(L("UI Encryption Key..."))) {
+		state.key_dialog_open = true;
+		// keep the current key so the dialog shows it on reopen
+		strncpy(state.key_dialog_buf, state.ui_key, sizeof(state.key_dialog_buf) - 1);
+		state.key_dialog_buf[sizeof(state.key_dialog_buf) - 1] = '\0';
+	}
 	ImGui::Separator();
 	if (ImGui::MenuItem(L("Close"), "Ctrl+W", false, state.active_doc >= 0)) {
 		if (state.dirty) {
@@ -180,6 +186,11 @@ static void edit_menu(EditorState &state)
 	if (ImGui::MenuItem(L("Duplicate"), "Ctrl+D", false, !state.selection_list.empty()))
 		EditorDuplicateSelection(state);
 	ImGui::Separator();
+	if (ImGui::MenuItem(L("Group"), "Ctrl+G", false, state.selection_list.size() >= 2))
+		EditorGroupSelection(state);
+	if (ImGui::MenuItem(L("Ungroup"), "Ctrl+Shift+G", false, !state.selection_list.empty()))
+		EditorUngroupSelection(state);
+	ImGui::Separator();
 	if (ImGui::MenuItem(L("Select All"), "Ctrl+A", false, state.ui != nullptr))
 		EditorSelectAll(state);
 	if (ImGui::MenuItem(L("Delete Selection"), "Del", false, !state.selection_list.empty()))
@@ -204,7 +215,15 @@ static void edit_menu(EditorState &state)
 		if (ImGui::MenuItem(L("Align Top"))) EditorAlignSelection(state, "top");
 		if (ImGui::MenuItem(L("Align Middle V"))) EditorAlignSelection(state, "middle");
 		if (ImGui::MenuItem(L("Align Bottom"))) EditorAlignSelection(state, "bottom");
-		ImGui::EndMenu();
+	}
+	if (ImGui::BeginMenu(L("Distribute"), state.selection_list.size() >= 3)) {
+		if (ImGui::MenuItem(L("Distribute Horizontal"))) EditorDistributeSelection(state, "h");
+		if (ImGui::MenuItem(L("Distribute Vertical"))) EditorDistributeSelection(state, "v");
+	}
+	if (ImGui::BeginMenu(L("Make Same Size"), state.selection_list.size() >= 2)) {
+		if (ImGui::MenuItem(L("Same Width"))) EditorMakeSameSize(state, "w");
+		if (ImGui::MenuItem(L("Same Height"))) EditorMakeSameSize(state, "h");
+		if (ImGui::MenuItem(L("Same Width && Height"))) EditorMakeSameSize(state, "wh");
 	}
 	ImGui::EndMenu();
 }
@@ -360,6 +379,46 @@ void EditorNewProjectDialog(EditorState &state)
 		ImGui::CloseCurrentPopup();
 	}
 
+	ImGui::EndPopup();
+}
+
+void EditorKeyDialog(EditorState &state)
+{
+	if (!state.key_dialog_open) return;
+	ImGui::OpenPopup(L("UI Encryption Key"));
+	ImGui::SetNextWindowSize(ImVec2(420, 0), ImGuiCond_Appearing);
+	if (!ImGui::BeginPopupModal(L("UI Encryption Key"), nullptr,
+								ImGuiWindowFlags_AlwaysAutoResize))
+		return;
+	ImGui::TextWrapped(
+		"%s",
+		L("key.hint"));
+	ImGui::InputText(L("Key"), state.key_dialog_buf, sizeof(state.key_dialog_buf));
+	if (ImGui::IsItemHovered()) ImGui::SetItemTooltip("%s", L("key.tooltip"));
+	ImGui::Spacing();
+	if (ImGui::Button(L("Apply"), ImVec2(120, 0))) {
+		// An empty key switches back to plain XML documents.
+		strncpy(state.ui_key, state.key_dialog_buf, sizeof(state.ui_key) - 1);
+		state.ui_key[sizeof(state.ui_key) - 1] = '\0';
+		// Persist immediately so the project build picks it up without
+		// requiring a Save Project first.
+		EditorSyncUiKeyFile(state);
+		state.key_dialog_open				   = false;
+		ImGui::CloseCurrentPopup();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button(L("Clear"), ImVec2(120, 0))) {
+		state.ui_key[0]		   = '\0';
+		state.key_dialog_buf[0] = '\0';
+		EditorSyncUiKeyFile(state);
+		state.key_dialog_open   = false;
+		ImGui::CloseCurrentPopup();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button(L("Cancel"), ImVec2(120, 0))) {
+		state.key_dialog_open = false;
+		ImGui::CloseCurrentPopup();
+	}
 	ImGui::EndPopup();
 }
 

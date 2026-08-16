@@ -27,6 +27,32 @@ static int unique_suffix(bapi_ui_t ui, const char *base)
 	}
 }
 
+static void palette_templates_section(EditorState &state)
+{
+	std::vector<std::string> templates = EditorListTemplates(state);
+	if (templates.empty()) return;
+	ImGui::Separator();
+	ImGui::TextUnformatted("Templates");
+	if (ImGui::BeginChild("palette_templates")) {
+		for (const std::string &path : templates) {
+			std::string name = path;
+			size_t slash = name.find_last_of("/\\");
+			if (slash != std::string::npos) name = name.substr(slash + 1);
+			ImGui::PushID(path.c_str());
+			if (ImGui::Selectable(name.c_str(), false)) {
+				EditorLoadTemplate(state, path.c_str());
+			}
+			if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+				ImGui::SetDragDropPayload("BAPI_UI_TEMPLATE", path.c_str(), path.size() + 1);
+				ImGui::Text("%s", name.c_str());
+				ImGui::EndDragDropSource();
+			}
+			ImGui::PopID();
+		}
+	}
+	ImGui::EndChild();
+}
+
 void EditorPalettePanel(EditorState &state)
 {
 	ImGui::Begin(L("Palette"));
@@ -65,5 +91,7 @@ void EditorPalettePanel(EditorState &state)
 		}
 	}
 	ImGui::EndChild();
+
+	palette_templates_section(state);
 	ImGui::End();
 }

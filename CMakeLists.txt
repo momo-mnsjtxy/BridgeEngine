@@ -91,8 +91,10 @@ set(BRIDGEENGINE_UI_SOURCES
 	src/scene.c
 	src/level.c
 	src/xml_loader.c
+	src/project.c
 	 src/ui.c
 	 src/ui_xml.c
+	 src/ui_crypt.c
 )
 set(BRIDGEENGINE_MEDIA_SOURCES
 	src/audio.c
@@ -324,6 +326,7 @@ if(BRIDGEENGINE_BUILD_TESTS)
 		tests/ui_xml_test.c
 		src/ui.c
 		src/ui_xml.c
+		src/ui_crypt.c
 		src/button.c
 	)
 	target_include_directories(bridgeengine_ui_xml_test PRIVATE
@@ -333,10 +336,22 @@ if(BRIDGEENGINE_BUILD_TESTS)
 	)
 	add_test(NAME bridgeengine.ui_xml COMMAND bridgeengine_ui_xml_test "${CMAKE_CURRENT_BINARY_DIR}")
 
+	add_executable(bridgeengine_project_bep_test
+		tests/project_bep_test.c
+		src/project.c
+	)
+	target_include_directories(bridgeengine_project_bep_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.project_bep COMMAND bridgeengine_project_bep_test "${CMAKE_CURRENT_BINARY_DIR}")
+
 	add_executable(bridgeengine_ui_save_test
 		tests/ui_save_test.c
 		src/ui.c
 		src/ui_xml.c
+		src/ui_crypt.c
 		src/button.c
 	)
 	target_include_directories(bridgeengine_ui_save_test PRIVATE
@@ -346,10 +361,26 @@ if(BRIDGEENGINE_BUILD_TESTS)
 	)
 	add_test(NAME bridgeengine.ui_save COMMAND bridgeengine_ui_save_test "${CMAKE_CURRENT_BINARY_DIR}")
 
+	add_executable(bridgeengine_ui_uix_test
+		tests/ui_uix_test.c
+		src/ui.c
+		src/ui_xml.c
+		src/ui_crypt.c
+		src/button.c
+	)
+	target_include_directories(bridgeengine_ui_uix_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	)
+	add_test(NAME bridgeengine.ui_uix COMMAND bridgeengine_ui_uix_test "${CMAKE_CURRENT_BINARY_DIR}")
+
+
 	add_executable(bridgeengine_ui_attributes_test
 		tests/ui_attributes_test.c
 		src/ui.c
 		src/ui_xml.c
+		src/ui_crypt.c
 		src/button.c
 	)
 	target_include_directories(bridgeengine_ui_attributes_test PRIVATE
@@ -363,6 +394,7 @@ if(BRIDGEENGINE_BUILD_TESTS)
 		tests/ui_tree_edit_test.c
 		src/ui.c
 		src/ui_xml.c
+		src/ui_crypt.c
 		src/button.c
 	)
 	target_include_directories(bridgeengine_ui_tree_edit_test PRIVATE
@@ -376,6 +408,7 @@ if(BRIDGEENGINE_BUILD_TESTS)
 		tests/ui_src_test.c
 		src/ui.c
 		src/ui_xml.c
+		src/ui_crypt.c
 		src/button.c
 	)
 	target_include_directories(bridgeengine_ui_src_test PRIVATE
@@ -389,6 +422,7 @@ if(BRIDGEENGINE_BUILD_TESTS)
 		tests/ui_interaction_test.c
 		src/ui.c
 		src/ui_xml.c
+		src/ui_crypt.c
 		src/button.c
 	)
 	target_include_directories(bridgeengine_ui_interaction_test PRIVATE
@@ -618,6 +652,17 @@ if(BRIDGEENGINE_BUILD_STATIC)
 	endif()
 	bridgeengine_configure_target(bridgeengine_static)
 	add_library(BridgeEngine::static ALIAS bridgeengine_static)
+
+	# Build-time .uix encryptor, used by project templates to encrypt ui/*.xml
+	# into *.uix when building. Links only the crypto source, not the runtime.
+	add_executable(bridgeengine_uix_encrypt
+		tools/uix_encrypt.c
+		src/ui_crypt.c
+	)
+	target_include_directories(bridgeengine_uix_encrypt PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+	)
 endif()
 
 if(BRIDGEENGINE_BUILD_EXAMPLES)
@@ -704,6 +749,9 @@ if(BRIDGEENGINE_BUILD_EDITOR AND TARGET bridgeengine_static)
 		editor/panels/scenes.cpp
 		editor/panels/welcome.cpp
 		editor/panels/build_output.cpp
+		editor/panels/context_menu.cpp
+		editor/panels/history.cpp
+		editor/templates.cpp
 	)
 	add_executable(bridgeengine_editor ${BRIDGEENGINE_EDITOR_SOURCES})
 	target_include_directories(bridgeengine_editor PRIVATE
@@ -773,6 +821,7 @@ if(BRIDGEENGINE_BUILD_XJ380)
 		src/scene.c
 		src/level.c
 		src/xml_loader.c
+		src/project.c
 		src/ui.c
 		src/ui_xml.c
 		src/audio.c

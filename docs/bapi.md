@@ -788,6 +788,34 @@ int bapi_ui_save_to_xml(bapi_ui_t ui, const char *filepath);
 - 有子组件的节点写成成对标签，无子组件的节点写成自闭合标签，两种形式 loader 都接受。
 
 ```c
+bapi_ui_t bapi_ui_load_from_file(const char *filepath, const char *key);
+int bapi_ui_save_to_file(bapi_ui_t ui, const char *filepath, const char *key);
+```
+
+带可选密钥的 UI 文档读写，用于防止发布资源被直接编辑（.uix 加密格式）。
+
+- `key` 为 `NULL` 或空串：`save_to_file` 等价于 `save_to_xml`，写明文 XML；`load_from_file` 读明文
+  XML（等价于 `load_from_xml`）。
+- `key` 非空：保存时把 XML 序列化后用密钥做流加密，写成二进制 `.uix` 文件（文件头 `BUIX` +
+  校验和 + 长度 + 密文）；加载时用相同密钥解密并按校验和校验，密钥错误、文件被篡改或明文文件
+  但传了密钥都会返回 `NULL`。
+- 这是混淆级保护（密钥在加载程序内部），用于挡住直接改文件的普通玩家，不是强加密。
+- 编辑器通过「File > UI Encryption Key...」设置密钥，设置后保存的文档即为 .uix。
+
+```c
+int bapi_uix_encrypt_file(const char *src_xml_path, const char *dst_uix_path, const char *key);
+int bapi_uix_decrypt_file(const char *src_uix_path, const char *dst_xml_path, const char *key);
+```
+
+构建期加密/解密工具，供项目模板的 POST_BUILD 使用：仓库保存可编辑的明文 XML，构建时用
+`bridgeengine_uix_encrypt` 工具把 `ui/*.xml` 加密成 `*.uix` 输出到产物目录，运行时用同一密钥
+`bapi_ui_load_from_file` 加载。两个函数返回 0 成功、-1 失败（密钥为空或文件读写失败）。
+
+编辑器在「File > Save Project」时会把 UI 加密密钥写入项目根目录的 `.uixkey` 文件；项目模板的
+CMakeLists 构建时自动读取它并加密 `ui/*.xml`。没有 `.uixkey`（或命令行未传
+`-DBRIDGEENGINE_UI_KEY=...`）时产物直接复制明文 xml，行为与旧版一致。
+
+```c
 void bapi_ui_render_ex(bapi_ui_t ui, float offset_x, float offset_y, float scale);
 ```
 带平移和缩放的渲染：所有组件按 `(rect.x + offset_x) * scale` 计算屏幕坐标，宽高和字号同步缩放。

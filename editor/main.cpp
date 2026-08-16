@@ -27,7 +27,7 @@ extern SDL_Renderer *g_editor_renderer;
 // the built-in default layout is applied once and the marker bumped; afterwards
 // the user's own layout is kept and never overwritten.
 // ---------------------------------------------------------------------------
-static const int kLayoutVersion = 4;
+static const int kLayoutVersion = 6;
 static int		 g_layout_version = 0;
 
 static void *layout_settings_read_open(ImGuiContext *, ImGuiSettingsHandler *, const char *)
@@ -85,6 +85,7 @@ static void apply_default_layout(ImGuiID dockspace_id)
 	ImGui::DockBuilderDockWindow(L("Properties"), dock_props);
 	ImGui::DockBuilderDockWindow(L("Preview"), dock_preview);
 	ImGui::DockBuilderDockWindow(L("Build Output"), dock_bottom);
+	ImGui::DockBuilderDockWindow(L("History"), dock_bottom);
 
 	ImGui::DockBuilderFinish(dockspace_id);
 }
@@ -120,6 +121,35 @@ static void setup_imgui_style(void)
 	style.FrameRounding		= 2.0f;
 	style.WindowBorderSize	= 1.0f;
 	style.FramePadding		= ImVec2(6, 4);
+
+	// Black theme. Base on the dark palette, then push the surfaces to near-black.
+	ImGui::StyleColorsDark(&style);
+	ImVec4 *colors			 = style.Colors;
+	colors[ImGuiCol_WindowBg]				= ImVec4(0.04f, 0.04f, 0.05f, 1.00f);
+	colors[ImGuiCol_ChildBg]				= ImVec4(0.03f, 0.03f, 0.04f, 1.00f);
+	colors[ImGuiCol_PopupBg]				= ImVec4(0.05f, 0.05f, 0.06f, 0.98f);
+	colors[ImGuiCol_FrameBg]				= ImVec4(0.08f, 0.08f, 0.09f, 1.00f);
+	colors[ImGuiCol_FrameBgHovered]			= ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
+	colors[ImGuiCol_FrameBgActive]			= ImVec4(0.15f, 0.15f, 0.17f, 1.00f);
+	colors[ImGuiCol_TitleBg]				= ImVec4(0.06f, 0.06f, 0.07f, 1.00f);
+	colors[ImGuiCol_TitleBgActive]			= ImVec4(0.10f, 0.10f, 0.12f, 1.00f);
+	colors[ImGuiCol_MenuBarBg]				= ImVec4(0.06f, 0.06f, 0.07f, 1.00f);
+	colors[ImGuiCol_Tab]					= ImVec4(0.06f, 0.06f, 0.07f, 1.00f);
+	colors[ImGuiCol_TabHovered]				= ImVec4(0.13f, 0.13f, 0.15f, 1.00f);
+	colors[ImGuiCol_TabActive]				= ImVec4(0.10f, 0.10f, 0.12f, 1.00f);
+	colors[ImGuiCol_TabUnfocused]			= ImVec4(0.05f, 0.05f, 0.06f, 1.00f);
+	colors[ImGuiCol_TabUnfocusedActive]		= ImVec4(0.08f, 0.08f, 0.10f, 1.00f);
+	colors[ImGuiCol_CheckMark]				= ImVec4(0.40f, 0.55f, 0.95f, 1.00f);
+	colors[ImGuiCol_Header]					= ImVec4(0.13f, 0.13f, 0.15f, 1.00f);
+	colors[ImGuiCol_HeaderHovered]			= ImVec4(0.18f, 0.18f, 0.21f, 1.00f);
+	colors[ImGuiCol_HeaderActive]			= ImVec4(0.20f, 0.20f, 0.23f, 1.00f);
+	colors[ImGuiCol_Button]					= ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
+	colors[ImGuiCol_ButtonHovered]			= ImVec4(0.18f, 0.18f, 0.21f, 1.00f);
+	colors[ImGuiCol_ButtonActive]			= ImVec4(0.22f, 0.22f, 0.25f, 1.00f);
+	colors[ImGuiCol_Separator]				= ImVec4(0.15f, 0.15f, 0.17f, 1.00f);
+	colors[ImGuiCol_Text]					= ImVec4(0.88f, 0.88f, 0.90f, 1.00f);
+	colors[ImGuiCol_TextDisabled]			= ImVec4(0.45f, 0.45f, 0.48f, 1.00f);
+	colors[ImGuiCol_Border]					= ImVec4(0.14f, 0.14f, 0.16f, 1.00f);
 }
 
 static void build_dockspace(EditorState &state)
@@ -222,6 +252,12 @@ int main(int argc, char *argv[])
 			if (ImGui::IsKeyPressed(ImGuiKey_V)) EditorPasteClipboard(state);
 			if (ImGui::IsKeyPressed(ImGuiKey_A)) EditorSelectAll(state);
 			if (ImGui::IsKeyPressed(ImGuiKey_D)) EditorDuplicateSelection(state);
+			if (ImGui::IsKeyPressed(ImGuiKey_G)) {
+				if (io.KeyShift)
+					EditorUngroupSelection(state);
+				else
+					EditorGroupSelection(state);
+			}
 			if (ImGui::IsKeyPressed(ImGuiKey_S)) {
 				if (state.filepath.empty()) {
 					std::string path = EditorSaveFileDialog(kUiFileFilter, "editor_out.xml");
@@ -297,10 +333,12 @@ int main(int argc, char *argv[])
 			EditorPreviewPanel(state);
 			EditorUpdateBuildThread(state);
 			EditorBuildOutputPanel(state);
+			EditorUndoPanel(state);
 		}
 		// Render the modal last so it always sits on top of every window,
 		// including the welcome screen.
 		EditorNewProjectDialog(state);
+		EditorKeyDialog(state);
 
 		// Clear the backbuffer first, then render the engine UI into the
 		// viewport region, then ImGui windows on top.
@@ -325,6 +363,7 @@ int main(int argc, char *argv[])
 
 	EditorSaveRecentFiles(state);
 	EditorSaveRecentProjects(state);
+	EditorSaveProjectSession(state);
 	if (state.ui) bapi_ui_destroy(state.ui);
 	bapi_engine_quit();
 	return 0;

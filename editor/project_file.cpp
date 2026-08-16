@@ -10,6 +10,7 @@
 namespace {
 
 static const char *kRecentProjectFile = "recent_projects.txt";
+static const char *kSessionFile		   = "project_sessions.txt";
 
 static void trim(std::string &value)
 {
@@ -126,19 +127,139 @@ void EditorSaveRecentProjects(EditorState &state)
 // Convert an absolute document path into a path relative to the project root
 // directory (the folder holding the .bep file). Falls back to the absolute
 // path when the document is not under the project root.
+static std::string normalize_slashes(const std::string &value)
+{
+	std::string out = value;
+	for (char &c : out)
+		if (c == '/') c = '\\';
+	return out;
+}
+
 static std::string relative_to_root(const std::string &root, const std::string &path)
 {
 	std::string root_dir = root;
 	if (!root_dir.empty() && root_dir.back() != '\\' && root_dir.back() != '/') root_dir += "\\";
-	size_t pos = path.find(root_dir);
-	if (pos == 0) {
-		std::string rel = path.substr(root_dir.size());
+	std::string norm_root = normalize_slashes(root_dir);
+	std::string norm_path = normalize_slashes(path);
+	if (norm_path.find(norm_root) == 0) {
+		std::string rel = norm_path.substr(norm_root.size());
 		// Normalize backslashes to forward slashes in the stored path.
 		for (char &c : rel)
 			if (c == '\\') c = '/';
 		return rel;
 	}
 	return path;
+}
+
+// ---------------------------------------------------------------------------
+// Per-project sessions: one line per project, "project_path|doc1|doc2|...",
+// where documents are relative to the project root. Written on save, read on
+// open so the previously open documents are restored.
+// ---------------------------------------------------------------------------
+
+static std::string escape_session_entry(const std::string &value)
+{
+	std::string out = value;
+	for (char &c : out)
+		if (c == '|' || c == '\n' || c == '\r') c = '_';
+	return out;
+}
+
+void EditorSaveProjectSession(EditorState &state)
+{
+	if (state.project_path.empty()) return;
+	std::string root	 = parent_dir(state.project_path);
+	FILE	   *file	 = std::fopen(kSessionFile, "rb");
+	std::string contents;
+	char		line[1024];
+	bool		found	 = false;
+	bool		replaced = false;
+	if (file) {
+		while (std::fgets(line, sizeof(line), file)) {
+			std::string value(line);
+			while (!value.empty() && (value.back() == '\n' || value.back() == '\r')) value.pop_back();
+			if (!replaced && value.rfind(state.project_path + "|", 0) == 0) {
+				// Rebuild this project's line from the current open documents.
+				std::string rebuilt = escape_session_entry(state.project_path);
+				for (int i = 0; i < (int)state.documents.size(); i++) {
+					const std::string &doc_path = EditorDocumentPath(state, i);
+					if (!doc_path.empty()) rebuilt += "|" + relative_to_root(root, doc_path);
+				}
+				contents += rebuilt;
+				contents += "\n";
+				replaced = true;
+				found	 = true;
+			} else {
+				contents += value;
+				contents += "\n";
+			}
+		}
+		std::fclose(file);
+	}
+	if (!replaced) {
+		std::string rebuilt = escape_session_entry(state.project_path);
+		for (int i = 0; i < (int)state.documents.size(); i++) {
+			const std::string &doc_path = EditorDocumentPath(state, i);
+			if (!doc_path.empty()) rebuilt += "|" + relative_to_root(root, doc_path);
+		}
+		contents += rebuilt;
+		contents += "\n";
+	}
+
+	file = std::fopen(kSessionFile, "wb");
+	if (!file) return;
+	std::fwrite(contents.data(), 1, contents.size(), file);
+	std::fclose(file);
+	(void)found;
+}
+
+std::vector<std::string> EditorLoadProjectSession(EditorState &state,
+												  const std::string &project_path)
+{
+	std::vector<std::string> result;
+	(void)state;
+	if (project_path.empty()) return result;
+
+	FILE *file = std::fopen(kSessionFile, "rb");
+	if (!file) return result;
+	char line[1024];
+	while (std::fgets(line, sizeof(line), file)) {
+		std::string value(line);
+		while (!value.empty() && (value.back() == '\n' || value.back() == '\r')) value.pop_back();
+		if (value.rfind(project_path + "|", 0) != 0) continue;
+		std::string rest = value.substr(project_path.size() + 1);
+		size_t		pos	 = 0;
+		while (pos < rest.size()) {
+			size_t next = rest.find('|', pos);
+			if (next == std::string::npos) next = rest.size();
+			std::string doc = rest.substr(pos, next - pos);
+			if (!doc.empty()) result.push_back(doc);
+			pos = next + 1;
+		}
+		break;
+	}
+	std::fclose(file);
+	return result;
+}
+
+// Sync the UI encryption key into <project>/.uixkey so the project's build
+// encrypts ui/*.xml -> *.uix automatically. An empty key removes the file
+// (build then copies plain XML, matching the old behaviour). No-op when no
+// project is open.
+void EditorSyncUiKeyFile(EditorState &state)
+{
+	if (state.project_path.empty()) return;
+	std::string root		 = parent_dir(state.project_path);
+	std::string key_path	 = root + "\\" + ".uixkey";
+	if (state.ui_key[0]) {
+		FILE *kf = std::fopen(key_path.c_str(), "wb");
+		if (kf) {
+			std::fprintf(kf, "%s", state.ui_key);
+			std::fclose(kf);
+		}
+	} else {
+		std::remove(key_path.c_str());
+	}
 }
 
 bool EditorSaveProject(EditorState &state, std::string &error_out)
@@ -176,6 +297,10 @@ bool EditorSaveProject(EditorState &state, std::string &error_out)
 	std::fprintf(file, "\n[documents]\n");
 	for (const std::string &doc : config.documents) std::fprintf(file, "%s\n", doc.c_str());
 	std::fclose(file);
+
+	EditorSyncUiKeyFile(state);
+
+	EditorSaveProjectSession(state);
 	return true;
 }
 
@@ -201,6 +326,11 @@ bool EditorOpenProject(EditorState &state, const char *path, std::string &error_
 	// then discard that now-parked untitled document.
 	while (state.documents.size() > 1) EditorCloseDocument(state, 0);
 
+	// Reopen the documents from the last session (if any) so the working set is
+	// restored, falling back to every document listed in the .bep.
+	std::vector<std::string> session_docs = EditorLoadProjectSession(state, path);
+	if (!session_docs.empty()) config.documents = session_docs;
+
 	bool loaded_any = false;
 	for (const std::string &relative : config.documents) {
 		std::string document_path = join_path(root, relative);
@@ -221,5 +351,19 @@ bool EditorOpenProject(EditorState &state, const char *path, std::string &error_
 	state.project_engine = config.engine;
 	state.show_welcome = false;
 	EditorPushRecentProject(state, path);
+	EditorSaveProjectSession(state);
+
+	// Restore the UI encryption key from <project>/.uixkey so the editor's
+	// save/load and the build stay consistent with the stored key. An absent
+	// file clears the key (project builds unencrypted).
+	std::string key_path = root + "\\" + ".uixkey";
+	FILE	   *kf		 = std::fopen(key_path.c_str(), "rb");
+	if (kf) {
+		size_t n = std::fread(state.ui_key, 1, sizeof(state.ui_key) - 1, kf);
+		state.ui_key[n] = '\0';
+		std::fclose(kf);
+	} else {
+		state.ui_key[0] = '\0';
+	}
 	return true;
 }

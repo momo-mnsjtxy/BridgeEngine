@@ -135,3 +135,44 @@ Hover = 悬停
 Click = 点击
 Apply color to all: = 将颜色应用到所有：
 Id already in use by a sibling component = 该 ID 已被同级组件使用
+
+# hierarchy search + layers
+Search components... = 搜索组件...
+(locked) = 已锁定
+(hidden) = 已隐藏
+Lock = 锁定
+Hide In Editor = 在编辑器中隐藏
+Delete = 删除
+
+# distribute / uniform size
+Distribute = 分布
+Distribute Horizontal = 水平分布
+Distribute Vertical = 垂直分布
+Make Same Size = 统一尺寸
+Same Width = 相同宽度
+Same Height = 相同高度
+Same Width && Height = 相同宽高
+
+# group / ungroup
+Group = 编组
+Ungroup = 取消编组
+
+# templates
+Templates = 模板
+Save as Template... = 保存为模板...
+
+# anchors (relative positioning)
+Anchors (relative to parent) = 锚点（相对父级）
+Offsets are relative to the parent's top-left. = 偏移相对于父级左上角。
+
+# undo history
+History = 历史
+No history yet. = 暂无历史记录。
+
+# ui encryption key
+UI Encryption Key... = UI 加密密钥...
+UI Encryption Key = UI 加密密钥
+key.hint = 设置后保存的 UI 文档会加密为 .uix 二进制文件，运行时需用相同密钥加载。密钥为空则保存为明文 XML（兼容旧文件）。
+key.tooltip = 留空并使用“应用”可切回明文 XML；设置新密钥后再保存的文档将使用新密钥加密。
+Apply = 应用
+Clear = 清除

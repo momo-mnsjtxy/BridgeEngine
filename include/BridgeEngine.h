@@ -22,6 +22,7 @@ typedef struct bapi_level_internal		   *bapi_level_t;
 typedef struct bapi_level_manager_internal *bapi_level_manager_t;
 typedef struct bapi_ui_internal			   *bapi_ui_t;
 typedef struct bapi_ui_component_internal  *bapi_ui_component_t;
+typedef struct bapi_project_internal	   *bapi_project_t;
 typedef struct bapi_file_internal		   *bapi_file_t;
 
 typedef struct {
@@ -424,7 +425,26 @@ int bapi_level_manager_save_to_xml(bapi_level_manager_t manager, const char *fil
 
 bapi_ui_t				 bapi_ui_create(void);
 bapi_ui_t				 bapi_ui_load_from_xml(const char *filepath);
-void					 bapi_ui_destroy(bapi_ui_t ui);
+// Load/save a UI document with an optional encryption key.
+//
+// If `key` is NULL or empty the file is plain XML (compatible with the
+// load_from_xml/save_to_xml functions). If `key` is non-empty the file is
+// stored as a binary .uix document: the XML payload is obfuscated with the key
+// and a header magic + checksum is written, so the file cannot be edited by
+// hand or trivially read. Loading a .uix file with a wrong/empty key fails and
+// returns NULL. Loading a plain XML file with a key also fails (returns NULL)
+// rather than silently accepting unencrypted content, so a project that
+// requires encryption can detect tampering. bapi_ui_load_from_file also
+// accepts plain XML when key is empty.
+bapi_ui_t bapi_ui_load_from_file(const char *filepath, const char *key);
+int		 bapi_ui_save_to_file(bapi_ui_t ui, const char *filepath, const char *key);
+// Build-time .uix encrypt/decrypt utilities. Encrypt a plain XML file into a
+// binary .uix document, or decrypt one back to plain XML. Intended for the
+// build step: the repository keeps editable plain XML, and the build encrypts
+// a copy into the output directory. Returns 0 on success, -1 on failure.
+int bapi_uix_encrypt_file(const char *src_xml_path, const char *dst_uix_path, const char *key);
+int bapi_uix_decrypt_file(const char *src_uix_path, const char *dst_xml_path, const char *key);
+void	 bapi_ui_destroy(bapi_ui_t ui);
 void					 bapi_ui_update(bapi_ui_t ui, const bapi_event_t *event);
 void					 bapi_ui_render(bapi_ui_t ui);
 void					 bapi_ui_layout(bapi_ui_t ui);
@@ -493,6 +513,19 @@ int	 bapi_ui_component_get_sides(bapi_ui_component_t component);
 int	 bapi_ui_component_set_sides(bapi_ui_component_t component, int sides);
 int	 bapi_ui_component_get_relative(bapi_ui_component_t component);
 int	 bapi_ui_component_set_relative(bapi_ui_component_t component, int relative);
+
+// --- Project (.bep) loading --------------------------------------------------
+// .bep is the editor's project file format (INI-style: name / engine /
+// [documents] section with relative document paths). These functions let a
+// runtime binary load a project description at startup without hard-coding the
+// list of scene documents. All returned strings are owned by the project and
+// remain valid until bapi_project_destroy.
+bapi_project_t bapi_project_load_from_bep(const char *filepath);
+void		   bapi_project_destroy(bapi_project_t project);
+const char	*bapi_project_get_name(bapi_project_t project);
+const char	*bapi_project_get_engine_dir(bapi_project_t project);
+int			   bapi_project_get_document_count(bapi_project_t project);
+const char	*bapi_project_get_document_path(bapi_project_t project, int index);
 
 const char *bridgeengine_get_version(void);
 int			bridgeengine_get_version_number(void);

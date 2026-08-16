@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +11,8 @@
 // multi-document management (M3-C): the active document's fields live directly
 // on EditorState; parked documents are swapped in/out of the state.
 // ---------------------------------------------------------------------------
+
+static void apply_smart_snap(EditorState &state, float *io_dx, float *io_dy);
 
 static void swap_doc_state(Document &doc, EditorState &state)
 {
@@ -37,9 +40,10 @@ static void swap_doc_state(Document &doc, EditorState &state)
 	std::swap(doc.marquee_cur_x, state.marquee_cur_x);
 	std::swap(doc.marquee_cur_y, state.marquee_cur_y);
 	std::swap(doc.owner_registry, state.owner_registry);
-	std::swap(doc.clipboard, state.clipboard);
 	std::swap(doc.active_scene, state.active_scene);
 	std::swap(doc.persistent_roots, state.persistent_roots);
+	std::swap(doc.locked, state.locked);
+	std::swap(doc.editor_hidden, state.editor_hidden);
 }
 
 static void reset_active_doc(EditorState &state)
@@ -68,9 +72,10 @@ static void reset_active_doc(EditorState &state)
 	state.marquee_cur_x = 0.0f;
 	state.marquee_cur_y = 0.0f;
 	state.owner_registry.clear();
-	state.clipboard.clear();
 	state.active_scene = nullptr;
 	state.persistent_roots.clear();
+	state.locked.clear();
+	state.editor_hidden.clear();
 }
 
 static bool has_doc(const EditorState &state)
@@ -112,6 +117,7 @@ void EditorActivateDocument(EditorState &state, int index)
 	if (has_doc(state)) swap_doc_state(*state.documents[state.active_doc], state);
 	state.active_doc = index;
 	swap_doc_state(*state.documents[index], state);
+	state.tab_select_request = index;
 }
 
 void EditorCloseDocument(EditorState &state, int index)
@@ -129,9 +135,13 @@ void EditorCloseDocument(EditorState &state, int index)
 		int next = index < (int)state.documents.size() ? index : (int)state.documents.size() - 1;
 		state.active_doc = next;
 		swap_doc_state(*state.documents[next], state);
+		state.tab_select_request = next;
 	} else {
 		state.documents.erase(state.documents.begin() + index);
-		if (index < state.active_doc) state.active_doc--;
+		if (index < state.active_doc) {
+			state.active_doc--;
+			state.tab_select_request = state.active_doc;
+		}
 	}
 }
 
@@ -278,12 +288,15 @@ void EditorNewDocument(EditorState &state)
 	reset_active_doc(state);
 	state.ui = bapi_ui_create();
 	EditorSetViewCamera(state, 1.0f, 0.0f, 0.0f);
+	state.tab_select_request = state.active_doc;
 }
 
 bool EditorLoadFile(EditorState &state, const char *path)
 {
 	if (!path || !path[0]) return false;
-	bapi_ui_t ui = bapi_ui_load_from_xml(path);
+	// load_from_file: plain XML when ui_key is empty, encrypted .uix otherwise
+	const char *key = state.ui_key[0] ? state.ui_key : "";
+	bapi_ui_t ui = bapi_ui_load_from_file(path, key);
 	if (!ui) return false;
 
 	if (has_doc(state)) swap_doc_state(*state.documents[state.active_doc], state);
@@ -297,12 +310,16 @@ bool EditorLoadFile(EditorState &state, const char *path)
 	state.show_welcome = false;
 	EditorSetViewCamera(state, 1.0f, 0.0f, 0.0f);
 	EditorPushRecentFile(state, path);
+	state.tab_select_request = state.active_doc;
 	return true;
 }
 
 bool EditorSaveFile(EditorState &state, const char *path)
 {
 	if (!state.ui || !path || !path[0]) return false;
+	// Documents are ALWAYS saved as plain XML: the source tree stays editable
+	// and diffable. Encryption happens at build time (project CMake reads
+	// .uixkey and encrypts ui/*.xml into the output dir), never in the editor.
 	if (bapi_ui_save_to_xml(state.ui, path) != 0) return false;
 	state.filepath = path;
 	state.dirty	   = false;
@@ -310,7 +327,8 @@ bool EditorSaveFile(EditorState &state, const char *path)
 	return true;
 }
 
-static bapi_ui_component_t hit_test_node(bapi_ui_component_t node, float x, float y)
+static bapi_ui_component_t hit_test_node(EditorState &state, bapi_ui_component_t node, float x,
+										float y)
 {
 	if (!node) return nullptr;
 	// Invisible components (and their subtrees) are not rendered, so they must
@@ -318,9 +336,11 @@ static bapi_ui_component_t hit_test_node(bapi_ui_component_t node, float x, floa
 	// visible content would steal the selection. Use the tree panel to select
 	// hidden components.
 	if (!bapi_ui_component_is_visible(node)) return nullptr;
+	// Locked components (and their subtrees) cannot be selected in the view.
+	if (state.locked.count(node)) return nullptr;
 	for (int i = bapi_ui_component_get_child_count(node) - 1; i >= 0; i--) {
 		bapi_ui_component_t child = bapi_ui_component_get_child(node, i);
-		bapi_ui_component_t hit   = hit_test_node(child, x, y);
+		bapi_ui_component_t hit   = hit_test_node(state, child, x, y);
 		if (hit) return hit;
 	}
 	bapi_rect_t rect;
@@ -344,7 +364,7 @@ bapi_ui_component_t EditorHitTest(EditorState &state, float doc_x, float doc_y)
 	if (!state.ui) return nullptr;
 	for (int i = bapi_ui_get_root_count(state.ui) - 1; i >= 0; i--) {
 		bapi_ui_component_t root = bapi_ui_get_root(state.ui, i);
-		bapi_ui_component_t hit  = hit_test_node(root, doc_x, doc_y);
+		bapi_ui_component_t hit  = hit_test_node(state, root, doc_x, doc_y);
 		if (hit) return hit;
 	}
 	return nullptr;
@@ -466,6 +486,8 @@ void EditorUpdateViewDrag(EditorState &state, float mouse_x, float mouse_y)
 		doc_dx = dx;
 		doc_dy = dy;
 	}
+	// smart snap (edge/center alignment) on top of grid snap
+	apply_smart_snap(state, &doc_dx, &doc_dy);
 	for (auto &entry : state.drag_start_rects) {
 		bapi_ui_component_t comp = entry.first;
 		if (!comp) continue;
@@ -482,6 +504,105 @@ void EditorEndViewDrag(EditorState &state)
 	state.drag_component = nullptr;
 	state.drag_start_rects.clear();
 	state.dragging		 = false;
+	state.snap_guides_v.clear();
+	state.snap_guides_h.clear();
+}
+
+// ---------------------------------------------------------------------------
+// smart snap: while dragging, align the dragged rects' edges and centers to
+// other (non-dragged) components' edges and centers. Mutates dx/dy to the
+// snapped delta and fills the guide-line positions (doc coords).
+// ---------------------------------------------------------------------------
+
+static const float kSnapThreshold = 8.0f; // doc units
+
+static void snap_axis(float edge, const std::vector<float> &targets, float *out_snap,
+					  std::vector<float> *out_guides)
+{
+	for (float t : targets) {
+		if (fabsf(edge - t) < kSnapThreshold) {
+			*out_snap += (t - edge);
+			out_guides->push_back(t);
+			return; // first match wins (keep guides small)
+		}
+	}
+}
+
+static void walk_components(bapi_ui_component_t node,
+							const std::function<bool(bapi_ui_component_t)> &visit)
+{
+	if (!node) return;
+	if (!visit(node)) return; // visit returns false to prune subtree
+	int n = bapi_ui_component_get_child_count(node);
+	for (int i = 0; i < n; i++) walk_components(bapi_ui_component_get_child(node, i), visit);
+}
+
+// Called during a drag: given the current (already-grid-snapped) delta, adjust
+// it so the dragged rects align to nearby component geometry, and record guide
+// lines for the overlay.
+static void apply_smart_snap(EditorState &state, float *io_dx, float *io_dy)
+{
+	state.snap_guides_v.clear();
+	state.snap_guides_h.clear();
+	if (state.drag_start_rects.empty() || !state.ui) return;
+
+	// Bounding box of the dragged selection at its current (pre-snap) position.
+	float minx = 1e30f, miny = 1e30f, maxx = -1e30f, maxy = -1e30f;
+	for (auto &entry : state.drag_start_rects) {
+		const bapi_rect_t &r = entry.second;
+		minx = std::min(minx, r.x + *io_dx);
+		miny = std::min(miny, r.y + *io_dy);
+		maxx = std::max(maxx, r.x + r.w + *io_dx);
+		maxy = std::max(maxy, r.y + r.h + *io_dy);
+	}
+	if (minx > maxx || miny > maxy) return;
+
+	// Candidate lines from the dragged bbox.
+	float edges_x[] = {minx, (minx + maxx) * 0.5f, maxx};
+	float edges_y[] = {miny, (miny + maxy) * 0.5f, maxy};
+
+	// Collect target lines from all components not in the dragged set.
+	std::vector<float> tv, th;
+	auto is_dragged = [&](bapi_ui_component_t c) { return state.drag_start_rects.count(c) != 0; };
+	walk_components(state.ui ? bapi_ui_get_root(state.ui, 0) : nullptr,
+					[&](bapi_ui_component_t comp) {
+						if (is_dragged(comp)) return true;
+						bapi_rect_t r;
+						bapi_ui_component_get_rect(comp, &r);
+						if (r.w <= 0.0f && r.h <= 0.0f) return true;
+						tv.push_back(r.x);
+						tv.push_back(r.x + r.w);
+						tv.push_back((r.x + r.x + r.w) * 0.5f);
+						th.push_back(r.y);
+						th.push_back(r.y + r.h);
+						th.push_back((r.y + r.y + r.h) * 0.5f);
+						return true;
+					});
+	// Also walk the remaining roots.
+	for (int ri = 0; ri < bapi_ui_get_root_count(state.ui); ri++)
+		if (ri > 0) {
+			walk_components(bapi_ui_get_root(state.ui, ri),
+							[&](bapi_ui_component_t comp) {
+								if (is_dragged(comp)) return true;
+								bapi_rect_t r;
+								bapi_ui_component_get_rect(comp, &r);
+								if (r.w <= 0.0f && r.h <= 0.0f) return true;
+								tv.push_back(r.x);
+								tv.push_back(r.x + r.w);
+								tv.push_back((r.x + r.x + r.w) * 0.5f);
+								th.push_back(r.y);
+								th.push_back(r.y + r.h);
+								th.push_back((r.y + r.y + r.h) * 0.5f);
+								return true;
+							});
+		}
+
+	// Snap dx using x-axis targets (guides are vertical lines), dy using y-axis.
+	float snap_dx = 0.0f, snap_dy = 0.0f;
+	for (float e : edges_x) snap_axis(e, tv, &snap_dx, &state.snap_guides_v);
+	for (float e : edges_y) snap_axis(e, th, &snap_dy, &state.snap_guides_h);
+	*io_dx += snap_dx;
+	*io_dy += snap_dy;
 }
 
 static bool rects_intersect(const bapi_rect_t &a, const bapi_rect_t &b)
@@ -489,16 +610,17 @@ static bool rects_intersect(const bapi_rect_t &a, const bapi_rect_t &b)
 	return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
-static void box_select_node(bapi_ui_component_t node, bapi_rect_t rect,
+static void box_select_node(EditorState &state, bapi_ui_component_t node, bapi_rect_t rect,
 							std::vector<bapi_ui_component_t> &out)
 {
 	if (!node) return;
 	if (!bapi_ui_component_is_visible(node)) return;
+	if (state.locked.count(node)) return; // locked subtrees are not box-selectable
 	bapi_rect_t r;
 	bapi_ui_component_get_rect(node, &r);
 	if (rects_intersect(rect, r)) out.push_back(node);
 	for (int i = 0; i < bapi_ui_component_get_child_count(node); i++)
-		box_select_node(bapi_ui_component_get_child(node, i), rect, out);
+		box_select_node(state, bapi_ui_component_get_child(node, i), rect, out);
 }
 
 std::vector<bapi_ui_component_t> EditorBoxSelect(EditorState &state, bapi_rect_t rect)
@@ -506,7 +628,7 @@ std::vector<bapi_ui_component_t> EditorBoxSelect(EditorState &state, bapi_rect_t
 	std::vector<bapi_ui_component_t> result;
 	if (!state.ui) return result;
 	for (int i = 0; i < bapi_ui_get_root_count(state.ui); i++)
-		box_select_node(bapi_ui_get_root(state.ui, i), rect, result);
+		box_select_node(state, bapi_ui_get_root(state.ui, i), rect, result);
 	return result;
 }
 
@@ -586,6 +708,7 @@ void EditorNudgeSelection(EditorState &state, float dx, float dy)
 	std::vector<RectMove> moves;
 	for (bapi_ui_component_t comp : state.selection_list) {
 		if (!comp) continue;
+		if (state.locked.count(comp)) continue;
 		bapi_rect_t old_rect;
 		bapi_ui_component_get_rect(comp, &old_rect);
 		bapi_rect_t new_rect = old_rect;

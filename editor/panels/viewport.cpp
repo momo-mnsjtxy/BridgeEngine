@@ -93,6 +93,10 @@ void EditorRenderEngineView(EditorState &state)
 
 	draw_doc_grid(renderer, state, w, h);
 
+	// Layout first so relative-positioned children (anchored to their parent)
+	// render at their resolved positions instead of raw local offsets.
+	bapi_ui_layout(state.ui);
+
 	bapi_ui_render_ex(state.ui, state.view_offset_x, state.view_offset_y, state.view_scale);
 
 	SDL_SetRenderTarget(renderer, prev_target);
@@ -231,7 +235,10 @@ void EditorViewportPanel(EditorState &state)
 	}
 
 	// ----- click to select / start drag / start marquee -----
-	bool hovered = mouse_in_viewport(state, mouse);
+	// Only respond when the mouse is actually over the Viewport window, not just
+	// within its coordinates: a docked/overlapping window (e.g. Documents) on top
+	// must keep its own clicks and drags instead of panning the canvas.
+	bool hovered = mouse_in_viewport(state, mouse) && ImGui::IsWindowHovered();
 	if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !state.dragging &&
 		!state.resizing && !state.marquee_active) {
 		int handle = resize_handle_hit(state, mouse.x, mouse.y);
@@ -243,8 +250,10 @@ void EditorViewportPanel(EditorState &state)
 			bapi_ui_component_t hit = EditorHitTest(state, doc_x, doc_y);
 			if (io.KeyCtrl) {
 				EditorToggleSelectComponent(state, hit);
+				if (hit) state.reveal_request = hit;
 			} else if (hit) {
 				EditorSelectComponent(state, hit);
+				state.reveal_request = hit;
 				EditorBeginViewDrag(state, mouse.x, mouse.y);
 			} else {
 				// empty space: begin marquee box-select
@@ -255,6 +264,26 @@ void EditorViewportPanel(EditorState &state)
 				state.marquee_cur_y		= doc_y;
 			}
 		}
+	}
+
+	// ----- right-click context menu -----
+	if (state.viewport_visible && ImGui::IsWindowHovered() &&
+		ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+		float doc_x = screen_to_doc_x(state, mouse.x);
+		float doc_y = screen_to_doc_y(state, mouse.y);
+		bapi_ui_component_t hit = EditorHitTest(state, doc_x, doc_y);
+		if (hit) {
+			bool already = std::find(state.selection_list.begin(), state.selection_list.end(),
+									 hit) != state.selection_list.end();
+			if (!already) EditorSelectComponent(state, hit);
+		} else {
+			EditorSelectComponent(state, nullptr);
+		}
+		ImGui::OpenPopup("##editor_ctx");
+	}
+	if (ImGui::BeginPopup("##editor_ctx")) {
+		EditorContextMenu(state, state.selection_list);
+		ImGui::EndPopup();
 	}
 
 	// ----- drag to move -----
@@ -321,7 +350,10 @@ void EditorViewportPanel(EditorState &state)
 	}
 
 	// ----- middle mouse pan -----
-	if (state.viewport_visible && ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
+	// Must check the mouse is inside the viewport: otherwise a middle-drag on the
+	// Documents panel or any other window would silently pan the canvas.
+	if (state.viewport_visible && mouse_in_viewport(state, mouse) &&
+		ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
 		ImVec2 delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Middle);
 		ImGui::ResetMouseDragDelta(ImGuiMouseButton_Middle);
 		state.view_offset_x += delta.x / state.view_scale;
@@ -341,6 +373,14 @@ void EditorViewportPanel(EditorState &state)
 			float doc_x = screen_to_doc_x(state, mouse.x);
 			float doc_y = screen_to_doc_y(state, mouse.y);
 			EditorCreateComponentAt(state, type, doc_x, doc_y);
+		}
+		if (const ImGuiPayload *payload =
+				ImGui::AcceptDragDropPayload("BAPI_UI_TEMPLATE")) {
+			std::string path(static_cast<const char *>(payload->Data),
+							 (size_t)payload->DataSize);
+			// strip trailing NUL that SetDragDropPayload copied
+			while (!path.empty() && path.back() == '\0') path.pop_back();
+			if (!path.empty()) EditorLoadTemplate(state, path.c_str());
 		}
 		ImGui::EndDragDropTarget();
 	}
@@ -386,6 +426,26 @@ void EditorViewportPanel(EditorState &state)
 		ImVec2		p2 = ImVec2(x1 < x2 ? x2 : x1, y1 < y2 ? y2 : y1);
 		dl->AddRectFilled(p1, p2, IM_COL32(90, 160, 255, 40));
 		dl->AddRect(p1, p2, IM_COL32(90, 160, 255, 220));
+	}
+
+	// ----- smart-snap guide lines -----
+	{
+		ImDrawList *dl = ImGui::GetWindowDrawList();
+		const ImU32 guide_col = IM_COL32(255, 80, 200, 220);
+		// vertical guides span the full viewport height
+		for (float gx : state.snap_guides_v) {
+			float sx = doc_to_window_x(state, gx);
+			dl->AddLine(ImVec2(sx, state.viewport_origin.y),
+						ImVec2(sx, state.viewport_origin.y + state.viewport_size.y), guide_col,
+						1.0f);
+		}
+		// horizontal guides span the full viewport width
+		for (float gy : state.snap_guides_h) {
+			float sy = doc_to_window_y(state, gy);
+			dl->AddLine(ImVec2(state.viewport_origin.x, sy),
+						ImVec2(state.viewport_origin.x + state.viewport_size.x, sy), guide_col,
+						1.0f);
+		}
 	}
 
 	// ----- empty state hint -----
