@@ -253,7 +253,8 @@ void bapi_texture_get_size(bapi_texture_t texture, int *w, int *h);
 bapi_texture_t bapi_texture_from_file(const char *filepath, int *out_w, int *out_h);
 ```
 从文件加载纹理并**按文件路径缓存**（最多 `BAPI_MAX_CACHED_TEXTURES` 个槽位）。命中缓存时返回
-同一句柄并增加引用计数；未命中则加载并写入缓存。`out_w`/`out_h` 可为 `NULL`，返回纹理尺寸。
+同一句柄并增加引用计数；未命中则加载并写入缓存。缓存满时淘汰最早入缓存的条目（被淘汰的纹理
+在仍有外部引用时保持可用，只是不再命中缓存）。`out_w`/`out_h` 可为 `NULL`，返回纹理尺寸。
 `filepath` 为空或加载失败返回 `NULL`。
 
 ```c
@@ -411,7 +412,8 @@ int bapi_is_mouse_button_down(int button);
 int bapi_is_mouse_button_pressed(int button);
 int bapi_is_mouse_button_released(int button);
 ```
-与按键语义一致。`button` 用 `BAPI_BUTTON_LEFT`（值为 1）等。
+与按键语义一致。`button` 用 `BAPI_BUTTON_LEFT`（值为 1）等。鼠标按键状态按位独立跟踪，
+多个按键同时按下时分别上报。
 
 ```c
 float bapi_get_mouse_x(void);
@@ -433,7 +435,9 @@ void bapi_camera_set_rotation(bapi_camera_t *cam, float angle_rad);
 void bapi_camera_set_viewport(bapi_camera_t *cam, float w, float h);
 ```
 `init` 把摄像机放在原点、缩放 1、无旋转。`move` 是相对移动，`set_position` 是绝对定位。旋转单位
-为弧度。所有函数要求 `cam` 非 `NULL`（不检查）。
+为弧度。所有函数要求 `cam` 非 `NULL`（不检查）。`zoom` 必须为正：`set_zoom` 会拒绝非正值（保持
+原值不变），若直接修改字段导致 `zoom <= 0`，`screen_to_world` 返回摄像机位置、
+`get_view_rect` 返回零矩形，避免除零产生 inf/NaN。
 
 ```c
 void bapi_camera_world_to_screen(bapi_camera_t *cam, float wx, float wy, float *sx, float *sy);
@@ -456,7 +460,9 @@ void bapi_scene_destroy(bapi_scene_t scene);
 ```
 创建/销毁场景。`name` 不能为 `NULL`，用于按名字查找和 XML 持久化。`callbacks` 含
 `on_enter`/`on_exit`/`on_update`/`on_render` 四个可选回调和一个 `user_data`（非空时会被写入场景）。
-`bapi_scene_destroy` 只释放场景本身，不释放 manager。
+`bapi_scene_destroy` 只释放场景本身，不释放 manager。**所有权**：场景加入 manager
+（`bapi_scene_manager_add_scene`）后归 manager 所有，`bapi_scene_manager_destroy` 会统一释放；
+不要在已注册后直接调用 `bapi_scene_destroy`，否则 manager 中留下悬垂指针并导致双重释放。
 
 ```c
 const char *bapi_scene_get_name(bapi_scene_t scene);
@@ -503,6 +509,8 @@ void bapi_level_destroy(bapi_level_t level);
 ```
 创建/销毁关卡。`name` 不能为 `NULL`。`index` 是逻辑关卡序号，用于按序号导航（0-255 内有效）。
 `callbacks` 结构与场景一致（`on_load`/`on_unload`/`on_update`/`on_render` + `user_data`）。
+**所有权**：与场景相同，关卡加入 manager 后归 manager 所有，不要在已注册后直接调用
+`bapi_level_destroy`。
 
 ```c
 const char *bapi_level_get_name(bapi_level_t level);
@@ -1062,6 +1070,51 @@ int64_t bapi_file_size(bapi_file_t file);
 void bapi_file_close(bapi_file_t file);
 ```
 关闭并释放文件句柄。`file` 为 `NULL` 时 no-op。关闭后不得再使用该句柄。
+
+### 资源包（RZip Pack）
+
+只读读取 RZip（`.rz`）资源包：枚举条目、按名字查询、整文件读取。仅桌面端实现；XJ380 上所有
+函数返回失败值并记录一次 warning。本组 API 为单线程使用：一个包对应一个句柄，句柄不可复制；
+`bapi_pack_file_name` 返回的名字指针归归档所有，`bapi_pack_close` 后失效。
+
+```c
+bapi_pack_t bapi_pack_open(const char *path);
+```
+打开资源包并解析头部与文件索引。失败（文件缺失、格式非法、截断）或 `path` 为 `NULL` 返回
+`NULL`。
+
+```c
+void bapi_pack_close(bapi_pack_t pack);
+```
+关闭归档并释放句柄。`pack` 为 `NULL` 时 no-op。关闭后不得再使用该句柄及其名字指针。
+
+```c
+int bapi_pack_file_count(bapi_pack_t pack);
+const char *bapi_pack_file_name(bapi_pack_t pack, int index);
+```
+条目数量与按索引取名字（索引 0 起，顺序与归档内顺序一致）。句柄非法返回 `-1`；
+`index` 越界返回 `NULL`。条目名按字节比较（UTF-8 不做归一化）。
+
+```c
+int bapi_pack_find_file(bapi_pack_t pack, const char *name);
+```
+按名字查找条目，返回索引；未找到或参数非法返回 `-1`。名字重复时返回第一个匹配。
+
+```c
+int64_t bapi_pack_file_size(bapi_pack_t pack, const char *name);
+```
+条目的逻辑（解压后）大小。当前 RZip 版本未实现压缩（`comp_size == dcom_size`），两者相等。
+未找到或参数非法返回 `-1`。
+
+```c
+size_t bapi_pack_read_file(bapi_pack_t pack, const char *name, void *buffer, size_t buffer_size);
+uint8_t *bapi_pack_read_file_alloc(bapi_pack_t pack, const char *name, size_t *out_size);
+```
+整文件读取。`read_file` 把条目内容拷入调用方缓冲区，返回实际拷贝字节数；缓冲区小于文件时
+截断（不视为错误）；参数非法或读取失败返回 0。空文件返回 0（与"未找到"不可区分，先
+`find_file` 判断存在性）。`read_file_alloc` 返回 `malloc` 的缓冲区（调用方 `free`），失败返回
+`NULL`；空文件返回非 `NULL` 的空缓冲区且 `*out_size == 0`。`out_size` 可为 `NULL`，仅在成功时
+写入。
 
 ### 版本
 

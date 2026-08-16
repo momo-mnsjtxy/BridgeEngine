@@ -8,6 +8,7 @@
 
 static bapi_texture_t g_texture_cache[BAPI_MAX_CACHED_TEXTURES];
 static bapi_texture_t g_allocated_textures;
+static int			  g_cache_evict_next;
 
 static char *bapi_texture_copy_key(const char *filepath)
 {
@@ -165,6 +166,15 @@ bapi_texture_t bapi_texture_from_file(const char *filepath, int *out_w, int *out
 
 	bapi_texture_t texture = bapi_texture_load(filepath);
 	if (!texture) return NULL;
+	if (free_slot < 0) {
+		/* Cache is full: evict the oldest entry (round-robin). The evicted
+		 * texture stays alive while user references to it remain. */
+		free_slot = g_cache_evict_next;
+		g_cache_evict_next = (g_cache_evict_next + 1) % BAPI_MAX_CACHED_TEXTURES;
+		bapi_texture_t victim = g_texture_cache[free_slot];
+		g_texture_cache[free_slot] = NULL;
+		bapi_texture_release(victim);
+	}
 	if (free_slot >= 0) {
 		texture->cache_key = bapi_texture_copy_key(filepath);
 		if (texture->cache_key) {

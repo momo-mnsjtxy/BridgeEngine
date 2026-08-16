@@ -23,7 +23,11 @@ typedef struct {
 	const char *base_dir;
 	bapi_ui_t	ui;
 	int			failed;
+	int			depth;
 } ui_parser_t;
+
+/* Bounds component nesting so deeply nested XML cannot overflow the stack. */
+#define MAX_UI_XML_DEPTH 256
 
 static char *ui_strdup(const char *value)
 {
@@ -208,6 +212,9 @@ static int parse_int(const ui_tag_t *tag, const char *name, int *out)
 {
 	float value;
 	if (parse_float(tag, name, &value) != 0) return -1;
+	/* Reject values outside int range before casting; casting an out-of-range
+	 * float (e.g. infinity from a huge digit string) is undefined behavior. */
+	if (value < -2147483648.0f || value >= 2147483648.0f) return -1;
 	*out = (int)value;
 	return value == (float)*out ? 0 : -1;
 }
@@ -385,22 +392,29 @@ static int apply_attributes(bapi_ui_component_t component, const ui_tag_t *tag,
 
 static int next_tag(ui_parser_t *parser, ui_tag_t *tag)
 {
-	parser->cursor = strchr(parser->cursor, '<');
-	if (!parser->cursor) return 0;
-	if (strncmp(parser->cursor, "<!--", 4) == 0) {
-		const char *end = strstr(parser->cursor + 4, "-->");
-		if (!end) return -1;
-		parser->cursor = end + 3;
-		return next_tag(parser, tag);
-	}
-	if (strncmp(parser->cursor, "<?", 2) == 0) {
-		const char *end = strstr(parser->cursor + 2, "?>");
-		if (!end) return -1;
-		parser->cursor = end + 2;
-		return next_tag(parser, tag);
+	for (;;) {
+		parser->cursor = strchr(parser->cursor, '<');
+		if (!parser->cursor) return 0;
+		if (strncmp(parser->cursor, "<!--", 4) == 0) {
+			const char *end = strstr(parser->cursor + 4, "-->");
+			if (!end) return -1;
+			parser->cursor = end + 3;
+			continue;
+		}
+		if (strncmp(parser->cursor, "<?", 2) == 0) {
+			const char *end = strstr(parser->cursor + 2, "?>");
+			if (!end) return -1;
+			parser->cursor = end + 2;
+			continue;
+		}
+		break;
 	}
 	const char *end = find_tag_end(parser->cursor + 1);
-	if (!end || parse_tag(parser->cursor, end, tag) != 0) return -1;
+	if (!end) return -1;
+	if (parse_tag(parser->cursor, end, tag) != 0) {
+		destroy_tag(tag);
+		return -1;
+	}
 	parser->cursor = end + 1;
 	return 1;
 }
@@ -428,7 +442,14 @@ static bapi_ui_component_t parse_component(ui_parser_t *parser, ui_tag_t *openin
 			if (!matches) parser->failed = 1;
 			return component;
 		}
+		if (parser->depth >= MAX_UI_XML_DEPTH) {
+			parser->failed = 1;
+			destroy_tag(&tag);
+			return component;
+		}
+		parser->depth++;
 		bapi_ui_component_t child = parse_component(parser, &tag);
+		parser->depth--;
 		destroy_tag(&tag);
 		if (!child || bapi_ui_component_add_child(component, child) != 0) {
 			bapi_ui_component_destroy(child);
@@ -442,7 +463,7 @@ static bapi_ui_component_t parse_component(ui_parser_t *parser, ui_tag_t *openin
 static bapi_ui_t parse_ui_buffer(const char *xml, const char *base_dir)
 {
 	bapi_ui_t	ui			= bapi_ui_create();
-	ui_parser_t parser		= {xml, base_dir, ui, 0};
+	ui_parser_t parser		= {xml, base_dir, ui, 0, 0};
 	ui_tag_t	root		= {0};
 	int			root_parsed = 0;
 	if (!ui || next_tag(&parser, &root) != 1 || root.closing ||

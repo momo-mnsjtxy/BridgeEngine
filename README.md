@@ -18,6 +18,7 @@ BridgeEngine 是一个跨平台 2D 图形引擎，提供简洁的 C API。桌面
 | **场景管理** | 多场景创建/切换，生命周期回调 |
 | **关卡管理** | 关卡加载/卸载，序列管理，上下级切换 |
 | **XML 配置** | 场景和关卡的 XML 文件加载与保存 |
+| **资源包** | RZip (.rz) 资源包读取：枚举条目、按名字查询、整文件读取 |
 | **输入系统** | 键盘状态查询、鼠标位置获取 |
 | **摄像机** | 2D 摄像机，支持平移、缩放、世界坐标转换 |
 | **数学工具** | 向量运算、插值、钳制等工具函数 |
@@ -213,6 +214,16 @@ v2 的公开接口仅为 `BridgeEngine.h`。旧项目若仍包含 `audio/audio.h
 ---
 ## 相关项目
 [BridgeEngine CLI](https://github.com/GHhuang1057/becli)用于更优雅的食用BridgeEngine :D
+
+## 第三方组件
+
+| 组件 | 用途 | 许可证 | 位置 |
+|------|------|--------|------|
+| RZip | RZip (`.rz`) 资源包读取，`src/pack.c` 封装 | BSD 3-Clause，Copyright (c) 2026, Rainy101112 | `thirdparty/rzip/` |
+
+RZip 以源码形式编译进 BridgeEngine 库（`rz_lib.c`）。其完整许可证文本见
+[`thirdparty/rzip/LICENSE`](thirdparty/rzip/LICENSE)；二进制分发时请随发行物一并提供该文件。
+SDK 其余依赖（SDL3、SDL3_image、SDL3_ttf、FFmpeg）由使用者按需安装，不随引擎分发。
 
 ## License
 

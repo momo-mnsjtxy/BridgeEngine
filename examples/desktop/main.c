@@ -441,9 +441,10 @@ static void shutdown(void)
 
 	bapi_input_cleanup();
 	bapi_mouse_cleanup();
-	bapi_engine_quit();
 
 	BAPI_LOG_INFO("Cleanup complete. Goodbye!");
+
+	bapi_engine_quit();
 }
 
 static const char *current_scene_name(void)

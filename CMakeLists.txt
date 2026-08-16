@@ -75,6 +75,7 @@ set(BRIDGEENGINE_CORE_SOURCES
 	src/core/init.c
 	src/core/version.c
 	src/io.c
+	src/pack.c
 	src/log.c
 )
 set(BRIDGEENGINE_RENDER_SOURCES
@@ -100,12 +101,21 @@ set(BRIDGEENGINE_MEDIA_SOURCES
 	src/audio.c
 	src/video/video.c
 )
+set(BRIDGEENGINE_THIRDPARTY_SOURCES
+	thirdparty/rzip/rz_lib.c
+)
+# rz_lib.c uses fseeko/ftello, which strict -std=c11 hides on glibc; the macro
+# is a harmless no-op on Windows (_WIN32 branch uses _fseeki64/_ftelli64).
+set_source_files_properties(thirdparty/rzip/rz_lib.c PROPERTIES
+	COMPILE_DEFINITIONS "_POSIX_C_SOURCE=200809L"
+)
 set(BRIDGEENGINE_SOURCES
 	${BRIDGEENGINE_PLATFORM_SOURCES}
 	${BRIDGEENGINE_CORE_SOURCES}
 	${BRIDGEENGINE_RENDER_SOURCES}
 	${BRIDGEENGINE_UI_SOURCES}
 	${BRIDGEENGINE_MEDIA_SOURCES}
+	${BRIDGEENGINE_THIRDPARTY_SOURCES}
 )
 
 if(BRIDGEENGINE_BUILD_SHARED OR BRIDGEENGINE_BUILD_STATIC OR BRIDGEENGINE_BUILD_EXAMPLES)
@@ -255,6 +265,7 @@ function(bridgeengine_configure_target target_name)
 			$<INSTALL_INTERFACE:include>
 		PRIVATE
 			${CMAKE_CURRENT_SOURCE_DIR}/src
+			${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/rzip
 			${BRIDGEENGINE_PLATFORM_INCLUDES}
 	)
 	target_compile_definitions(${target_name} PRIVATE BAPI_LOG_ENABLED)
@@ -630,6 +641,18 @@ if(BRIDGEENGINE_BUILD_TESTS)
 		"${CMAKE_CURRENT_SOURCE_DIR}/src"
 	)
 	add_test(NAME bridgeengine.file_io COMMAND bridgeengine_file_io_test)
+
+	add_executable(bridgeengine_pack_test
+		tests/pack_test.c
+		src/pack.c
+		thirdparty/rzip/rz_lib.c
+	)
+	target_include_directories(bridgeengine_pack_test PRIVATE
+		"${CMAKE_CURRENT_SOURCE_DIR}/include"
+		"${CMAKE_CURRENT_BINARY_DIR}/generated"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/rzip"
+	)
+	add_test(NAME bridgeengine.pack COMMAND bridgeengine_pack_test "${CMAKE_CURRENT_BINARY_DIR}")
 endif()
 
 if(BRIDGEENGINE_BUILD_SHARED)
@@ -809,6 +832,7 @@ if(BRIDGEENGINE_BUILD_XJ380)
 		src/core/init.c
 		src/core/version.c
 		src/io.c
+		src/pack_stub.c
 		src/log.c
 		src/draw.c
 		src/input/mouse_drawing.c

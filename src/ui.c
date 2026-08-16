@@ -107,7 +107,10 @@ bapi_ui_component_t bapi_ui_component_create(bapi_ui_component_type_t type, cons
 
 int bapi_ui_component_add_child(bapi_ui_component_t parent, bapi_ui_component_t child)
 {
-	if (!parent || !child ||
+	/* A component with a parent is already owned by a tree; mounting it again
+	 * (same parent or another) would make bapi_ui_component_destroy free it
+	 * twice. */
+	if (!parent || !child || child->parent != NULL ||
 		ui_reserve((void **)&parent->children, &parent->child_capacity, parent->child_count,
 				   sizeof(*parent->children)) != 0)
 		return -1;
@@ -210,7 +213,9 @@ bapi_ui_component_t bapi_ui_component_clone(bapi_ui_component_t source)
 
 int bapi_ui_add_root(bapi_ui_t ui, bapi_ui_component_t component)
 {
-	if (!ui || !component || ui_tree_has_duplicate(component, component)) return -1;
+	if (!ui || !component || component->parent != NULL ||
+		ui_tree_has_duplicate(component, component))
+		return -1;
 	for (int i = 0; i < ui->root_count; i++)
 		if (ui_tree_conflicts(component, ui->roots[i])) return -1;
 	if (ui_reserve((void **)&ui->roots, &ui->root_capacity, ui->root_count, sizeof(*ui->roots)) !=

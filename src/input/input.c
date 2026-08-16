@@ -54,10 +54,10 @@ void bapi_input_handle_event(const bapi_event_t *event)
 		break;
 	}
 	case BAPI_EVENT_MOUSE_BUTTON_DOWN:
-		g_input.mouse_buttons = bapi_event_get_mouse_button(event);
+		g_input.mouse_buttons |= 1 << bapi_event_get_mouse_button(event);
 		break;
 	case BAPI_EVENT_MOUSE_BUTTON_UP:
-		g_input.mouse_buttons = 0;
+		g_input.mouse_buttons &= ~(1 << bapi_event_get_mouse_button(event));
 		break;
 	case BAPI_EVENT_MOUSE_MOTION:
 		g_input.mouse_x = (float)bapi_event_get_motion_x(event);
@@ -83,17 +83,22 @@ int bapi_is_key_released(uint8_t key)
 
 int bapi_is_mouse_button_down(int button)
 {
-	return g_input.mouse_buttons == button;
+	if (button < 0 || button >= 31) return 0;
+	return (g_input.mouse_buttons >> button) & 1;
 }
 
 int bapi_is_mouse_button_pressed(int button)
 {
-	return g_input.mouse_buttons == button && g_input.mouse_buttons_prev != button;
+	if (button < 0 || button >= 31) return 0;
+	return ((g_input.mouse_buttons >> button) & 1) &&
+		   !((g_input.mouse_buttons_prev >> button) & 1);
 }
 
 int bapi_is_mouse_button_released(int button)
 {
-	return g_input.mouse_buttons != button && g_input.mouse_buttons_prev == button;
+	if (button < 0 || button >= 31) return 0;
+	return !((g_input.mouse_buttons >> button) & 1) &&
+		   ((g_input.mouse_buttons_prev >> button) & 1);
 }
 
 float bapi_get_mouse_x(void)

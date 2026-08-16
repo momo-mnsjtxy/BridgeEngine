@@ -17,6 +17,13 @@ static inline UINT32 make_rgba(uint8_t r, uint8_t g, uint8_t b, uint8_t a)
 	return (UINT32)r << 24 | (UINT32)g << 16 | (UINT32)b << 8 | (UINT32)a;
 }
 
+/* Casting a negative float to UINT32 wraps to a huge value; clip instead so
+ * off-screen coordinates stay clipped instead of drawing at ~4 billion. */
+static UINT32 xj380_clip_coord(float value)
+{
+	return (value > 0.0f) ? (UINT32)value : 0u;
+}
+
 static char *xj380_copy_string(const char *text)
 {
 	if (!text) return NULL;
@@ -275,6 +282,7 @@ static plat_window_t xj380_create_window(const char *title, int width, int heigh
 	if (!w) return NULL;
 
 	XWINDOW xwin;
+	memset(&xwin, 0, sizeof(xwin));
 	xwin.width	= (UINT32)width;
 	xwin.height = (UINT32)height;
 	xwin.title	= xj380_xapi_string(title);
@@ -371,7 +379,12 @@ static void xj380_render_clear(plat_renderer_t renderer)
 
 	if (w <= 0 || h <= 0) return;
 
-	XCOLORA *buf = (XCOLORA *)xapi_AllocateMemory((UINT64)(w * h * sizeof(XCOLORA)));
+	/* Compute in 64-bit first: w * h * sizeof(XCOLORA) overflows 32-bit int
+	 * for large windows and would allocate a short buffer. */
+	int64_t pixel_count = (int64_t)w * h;
+	if (pixel_count > (int64_t)0x7FFFFFFF / (int64_t)sizeof(XCOLORA)) return;
+
+	XCOLORA *buf = (XCOLORA *)xapi_AllocateMemory((UINT64)pixel_count * sizeof(XCOLORA));
 	if (!buf) return;
 
 	XCOLORA fill_color;
@@ -380,7 +393,7 @@ static void xj380_render_clear(plat_renderer_t renderer)
 	fill_color.Blue	 = renderer->b;
 	fill_color.Alpha = renderer->a;
 
-	for (int i = 0; i < w * h; i++) {
+	for (int64_t i = 0; i < pixel_count; i++) {
 		buf[i] = fill_color;
 	}
 
@@ -398,30 +411,31 @@ static void xj380_render_point(plat_renderer_t renderer, float x, float y)
 {
 	if (!renderer || !renderer->window) return;
 	UINT32 color = make_rgba(renderer->r, renderer->g, renderer->b, renderer->a);
-	xapi_DrawPoint(renderer->window->handle, (UINT32)x, (UINT32)y, color);
+	xapi_DrawPoint(renderer->window->handle, xj380_clip_coord(x), xj380_clip_coord(y), color);
 }
 
 static void xj380_render_line(plat_renderer_t renderer, float x1, float y1, float x2, float y2)
 {
 	if (!renderer || !renderer->window) return;
 	UINT32 color = make_rgba(renderer->r, renderer->g, renderer->b, renderer->a);
-	xapi_DrawLine(renderer->window->handle, (UINT32)x1, (UINT32)y1, (UINT32)x2, (UINT32)y2, color);
+	xapi_DrawLine(renderer->window->handle, xj380_clip_coord(x1), xj380_clip_coord(y1),
+				  xj380_clip_coord(x2), xj380_clip_coord(y2), color);
 }
 
 static void xj380_render_rect(plat_renderer_t renderer, float x, float y, float w, float h)
 {
 	if (!renderer || !renderer->window) return;
 	UINT32 color = make_rgba(renderer->r, renderer->g, renderer->b, renderer->a);
-	xapi_DrawRect(renderer->window->handle, (UINT32)x, (UINT32)y, (UINT32)(x + w), (UINT32)(y + h),
-				  color, false);
+	xapi_DrawRect(renderer->window->handle, xj380_clip_coord(x), xj380_clip_coord(y),
+				  xj380_clip_coord(x + w), xj380_clip_coord(y + h), color, false);
 }
 
 static void xj380_render_fill_rect(plat_renderer_t renderer, float x, float y, float w, float h)
 {
 	if (!renderer || !renderer->window) return;
 	UINT32 color = make_rgba(renderer->r, renderer->g, renderer->b, renderer->a);
-	xapi_DrawRect(renderer->window->handle, (UINT32)x, (UINT32)y, (UINT32)(x + w), (UINT32)(y + h),
-				  color, true);
+	xapi_DrawRect(renderer->window->handle, xj380_clip_coord(x), xj380_clip_coord(y),
+				  xj380_clip_coord(x + w), xj380_clip_coord(y + h), color, true);
 }
 
 static void xj380_render_texture(plat_renderer_t renderer, plat_texture_t texture, float x, float y,
@@ -435,7 +449,8 @@ static void xj380_render_texture(plat_renderer_t renderer, plat_texture_t textur
 	case TEX_IMAGE:
 
 		if (texture->data.image.filepath) {
-			xapi_DrawPicture(handle, (UINT32)x, (UINT32)y, (UINT32)w, (UINT32)h,
+			xapi_DrawPicture(handle, xj380_clip_coord(x), xj380_clip_coord(y),
+							 xj380_clip_coord(w), xj380_clip_coord(h),
 							 xj380_xapi_string(texture->data.image.filepath));
 		}
 		break;
@@ -445,7 +460,8 @@ static void xj380_render_texture(plat_renderer_t renderer, plat_texture_t textur
 		if (texture->data.text.text) {
 			UINT32 color = make_rgba(texture->data.text.r, texture->data.text.g,
 									 texture->data.text.b, texture->data.text.a);
-			xapi_DrawText(handle, (UINT32)x, (UINT32)y, xj380_xapi_string(texture->data.text.text),
+			xapi_DrawText(handle, xj380_clip_coord(x), xj380_clip_coord(y),
+						  xj380_xapi_string(texture->data.text.text),
 						  (UINT32)texture->data.text.size, color);
 		}
 		break;
@@ -459,12 +475,17 @@ static void xj380_render_texture(plat_renderer_t renderer, plat_texture_t textur
 
 			if (render_w == texture->width && render_h == texture->height) {
 
-				xapi_WriteBufferA(handle, (UINT32)x, (UINT32)y, (UINT32)render_w, (UINT32)render_h,
+				xapi_WriteBufferA(handle, xj380_clip_coord(x), xj380_clip_coord(y),
+								  (UINT32)render_w, (UINT32)render_h,
 								  (XCOLORA *)texture->data.pixel.pixels);
 			} else {
 
-				XCOLORA *scaled =
-					(XCOLORA *)xapi_AllocateMemory((UINT64)(render_w * render_h * sizeof(XCOLORA)));
+				int64_t scaled_count = (int64_t)render_w * render_h;
+				if (scaled_count <= 0 ||
+					scaled_count > (int64_t)0x7FFFFFFF / (int64_t)sizeof(XCOLORA))
+					return;
+				XCOLORA *scaled = (XCOLORA *)xapi_AllocateMemory((UINT64)scaled_count *
+																 sizeof(XCOLORA));
 				if (scaled) {
 					XCOLORA *src = (XCOLORA *)texture->data.pixel.pixels;
 					for (int sy = 0; sy < render_h; sy++) {
@@ -474,8 +495,8 @@ static void xj380_render_texture(plat_renderer_t renderer, plat_texture_t textur
 							scaled[sy * render_w + sx] = src[src_y * texture->width + src_x];
 						}
 					}
-					xapi_WriteBufferA(handle, (UINT32)x, (UINT32)y, (UINT32)render_w,
-									  (UINT32)render_h, scaled);
+					xapi_WriteBufferA(handle, xj380_clip_coord(x), xj380_clip_coord(y),
+									  (UINT32)render_w, (UINT32)render_h, scaled);
 					xapi_FreeMemory(scaled);
 				}
 			}
@@ -518,19 +539,28 @@ static plat_texture_t xj380_create_texture_from_surface(plat_renderer_t renderer
 		t->data.text.a	  = surface->data.text.a;
 		break;
 
-	case SURF_PIXELS:
+	case SURF_PIXELS: {
 		t->type				= TEX_PIXELS;
 		t->width			= surface->width;
 		t->height			= surface->height;
 		t->data.pixel.pitch = surface->width * 4;
-		{
-			int size			 = surface->width * surface->height * 4;
-			t->data.pixel.pixels = (uint8_t *)xapi_AllocateMemory((UINT64)size);
-			if (t->data.pixel.pixels && surface->data.pixel.pixels) {
-				memcpy(t->data.pixel.pixels, surface->data.pixel.pixels, size);
-			}
+		int64_t size		= (int64_t)surface->width * surface->height * 4;
+		if (size <= 0 || size > (int64_t)0x7FFFFFFF) {
+			free(t);
+			return NULL;
+		}
+		t->data.pixel.pixels = (uint8_t *)xapi_AllocateMemory((UINT64)size);
+		if (!t->data.pixel.pixels || !surface->data.pixel.pixels) break;
+		/* Copy row by row: the source surface may carry padding (pitch
+		 * larger than width*4); a flat memcpy would misalign or overread. */
+		size_t row_bytes = (size_t)surface->width * 4;
+		for (int y = 0; y < surface->height; y++) {
+			memcpy(t->data.pixel.pixels + (size_t)y * row_bytes,
+				   surface->data.pixel.pixels + (size_t)y * (size_t)surface->data.pixel.pitch,
+				   row_bytes);
 		}
 		break;
+	}
 	}
 
 	return t;
@@ -549,13 +579,19 @@ static plat_texture_t xj380_create_texture(plat_renderer_t renderer, plat_pixel_
 	t->height			= height;
 	t->data.pixel.pitch = width * 4;
 
-	int size			 = width * height * 4;
+	/* Compute in 64-bit first: width * height * 4 overflows 32-bit int for
+	 * large textures and would allocate a short buffer. */
+	int64_t size = (int64_t)width * height * 4;
+	if (size <= 0 || size > (int64_t)0x7FFFFFFF) {
+		free(t);
+		return NULL;
+	}
 	t->data.pixel.pixels = (uint8_t *)xapi_AllocateMemory((UINT64)size);
 	if (!t->data.pixel.pixels) {
 		free(t);
 		return NULL;
 	}
-	memset(t->data.pixel.pixels, 0, size);
+	memset(t->data.pixel.pixels, 0, (size_t)size);
 
 	(void)format;
 	(void)access;
@@ -628,6 +664,13 @@ static plat_surface_t *xj380_load_image(const char *filepath)
 
 	UINT32 w = 0, h = 0;
 	xapi_GetPicSize(&w, &h, xj380_xapi_string(filepath));
+
+	/* Treat a 0x0 result as a failed/missing image instead of handing the
+	 * caller a "successful" surface that can never draw anything. */
+	if (w == 0 || h == 0) {
+		free(s);
+		return NULL;
+	}
 
 	s->type				   = SURF_IMAGE;
 	s->width			   = (int)w;
@@ -884,7 +927,10 @@ static size_t xj380_io_read(plat_io_t *io, void *buf, size_t size)
 static int64_t xj380_io_seek(plat_io_t *io, int64_t offset, int whence)
 {
 	if (!io || !io->fp) return -1;
-	return fseek(io->fp, (long)offset, whence);
+	/* Return the new position like the SDL3 backend (SDL_SeekIO) does;
+	 * fseek returns a status code, which broke the cross-backend contract. */
+	if (fseek(io->fp, (long)offset, whence) != 0) return -1;
+	return (int64_t)ftell(io->fp);
 }
 
 static int64_t xj380_io_tell(plat_io_t *io)

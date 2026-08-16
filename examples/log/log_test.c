@@ -1,3 +1,5 @@
+#define BAPI_LOG_ENABLED
+
 #include <BridgeEngine.h>
 #include <stdio.h>
 

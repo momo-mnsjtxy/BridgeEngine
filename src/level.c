@@ -3,6 +3,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Hash the same truncated form that is stored in ->name, so that names
+ * longer than MAX_NAME_LENGTH-1 stay addressable by their full input. */
+static uint32_t hash_name(const char *name)
+{
+	char truncated[MAX_NAME_LENGTH];
+	strncpy(truncated, name, MAX_NAME_LENGTH - 1);
+	truncated[MAX_NAME_LENGTH - 1] = '\0';
+	return bapi_hash_string(truncated);
+}
+
+/* Stored names are truncated to MAX_NAME_LENGTH-1; compare that prefix. */
+static int name_matches(const char *stored, const char *input)
+{
+	return strncmp(stored, input, MAX_NAME_LENGTH - 1) == 0;
+}
+
 bapi_level_t bapi_level_create(const char *name, int index, bapi_level_callbacks_t callbacks)
 {
 	if (!name) return NULL;
@@ -12,7 +28,7 @@ bapi_level_t bapi_level_create(const char *name, int index, bapi_level_callbacks
 
 	strncpy(level->name, name, MAX_NAME_LENGTH - 1);
 	level->name[MAX_NAME_LENGTH - 1] = '\0';
-	level->name_hash				 = bapi_hash_string(name);
+	level->name_hash				 = hash_name(name);
 	level->index					 = index;
 	level->callbacks				 = callbacks;
 	level->user_data				 = callbacks.user_data;
@@ -114,11 +130,11 @@ int bapi_level_manager_load_level(bapi_level_manager_t manager, const char *name
 {
 	if (!manager || !name) return -1;
 
-	uint32_t target_hash = bapi_hash_string(name);
+	uint32_t target_hash = hash_name(name);
 
 	for (int i = 0; i < manager->level_count; i++) {
 		if (manager->levels[i]->name_hash == target_hash) {
-			if (strcmp(manager->levels[i]->name, name) == 0) {
+			if (name_matches(manager->levels[i]->name, name)) {
 				return load_level_internal(manager, manager->levels[i]);
 			}
 		}
@@ -173,11 +189,11 @@ bapi_level_t bapi_level_manager_get_level(bapi_level_manager_t manager, const ch
 {
 	if (!manager || !name) return NULL;
 
-	uint32_t target_hash = bapi_hash_string(name);
+	uint32_t target_hash = hash_name(name);
 
 	for (int i = 0; i < manager->level_count; i++) {
 		if (manager->levels[i]->name_hash == target_hash) {
-			if (strcmp(manager->levels[i]->name, name) == 0) {
+			if (name_matches(manager->levels[i]->name, name)) {
 				return manager->levels[i];
 			}
 		}

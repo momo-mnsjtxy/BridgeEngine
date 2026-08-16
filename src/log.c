@@ -96,11 +96,8 @@ bool bapi_log_init(const bapi_log_config_t *config)
 		g_log_state.log_file_path = config->log_file_path;
 	}
 
-	if (plat) {
+	if (plat && g_log_state.mutex == NULL) {
 		g_log_state.mutex = plat->sync.create_mutex();
-		if (g_log_state.mutex == NULL) {
-			return false;
-		}
 	}
 
 	if (g_log_state.use_file && g_log_state.log_file_path != NULL) {
@@ -207,16 +204,26 @@ void bapi_log_message(bapi_log_level_t level, const char *file, int line, const 
 
 	const plat_interface_t *plat = plat_get();
 
+	/*
+	 * bapi_log_init may run before the platform exists (the demo does), which
+	 * left the mutex unset permanently. Create it lazily so concurrent log
+	 * callers are still serialized. On the single-threaded main loop the
+	 * check-then-create race is benign; worst case one mutex object leaks.
+	 */
+	if (plat && g_log_state.mutex == NULL) {
+		g_log_state.mutex = plat->sync.create_mutex();
+	}
+
+	if (plat && g_log_state.mutex != NULL) {
+		plat->sync.lock_mutex(g_log_state.mutex);
+	}
+
 	char	buffer[1024];
 	va_list args;
 
 	va_start(args, format);
 	format_message(buffer, sizeof(buffer), level, file, line, func, format, args);
 	va_end(args);
-
-	if (plat && g_log_state.mutex != NULL) {
-		plat->sync.lock_mutex(g_log_state.mutex);
-	}
 
 	switch (level) {
 	case BAPI_LOG_LEVEL_DEBUG:

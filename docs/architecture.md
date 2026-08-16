@@ -13,12 +13,15 @@ BridgeEngine 保持公开 BAPI 稳定，并将平台相关实现隔离在 `src/i
 - `text`：字体与文字渲染。
 - `audio`：音频设备、流和 WAV 加载。
 - `sync`：互斥锁。
+- `io`：只读文件流。
 
 `plat_get()` 是唯一的平台内部入口。引擎 module 直接使用相应能力组，`plat_interface_t` 不再提供扁平的兼容函数指针。
 
 `plat_interface_t.capabilities` 是内部能力位图，`plat_supports()` 用于查询。SDL3 声明音频和视频能力；XJ380 两者均不声明。运行时始终请求窗口/图形初始化，仅在声明音频能力时追加 `PLAT_INIT_AUDIO`。XJ380 的音频 vtable 保持为 `NULL` 槽位，渲染和内置文字能力不受影响。
 
 不支持的媒体通过既有 BAPI 返回值显式失败：音频/视频初始化返回非零，声音/视频加载返回 `NULL`；每种媒体首次失败写入一条平台 warning。没有返回值的媒体控制和清理函数仍为安全无操作。这是内部 adapter 契约，不新增公开 capability 查询接口。
+
+资源包读取（`src/pack.c`）不经过平台层，直接封装 `thirdparty/rzip/rz_lib.c`（C99，仅依赖标准库），仅桌面端编译；XJ380 使用 `src/pack_stub.c`，所有 `bapi_pack_*` 返回失败并记录一次 warning（rz_lib 依赖 POSIX `sys/stat.h`/`fseeko` 等，XJ380 freestanding 环境不可用）。
 
 ## 文字后端
 
