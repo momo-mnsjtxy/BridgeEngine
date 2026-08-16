@@ -152,11 +152,38 @@ static void setup_imgui_style(void)
 	colors[ImGuiCol_Border]					= ImVec4(0.14f, 0.14f, 0.16f, 1.00f);
 }
 
+// Heights of the custom title bar + menu bar + toolbar (px). The dockspace
+// starts below them. Must match titlebar.cpp / menu.cpp / toolbar.cpp.
+static const float kTitleBarH = 30.0f;
+static const float kMenuBarH  = 28.0f;
+static const float kToolbarH  = 36.0f;
+static const float kTopChromeH = kTitleBarH + kMenuBarH + kToolbarH;
+
 static void build_dockspace(EditorState &state)
 {
 	ImGuiID dockspace_id = ImGui::GetID("DockSpace");
-	ImGui::DockSpaceOverViewport(dockspace_id, ImGui::GetMainViewport(),
-								 ImGuiDockNodeFlags_PassthruCentralNode);
+
+	// Dock host spans the whole viewport below the top chrome (title bar,
+	// menu bar, toolbar).
+	ImGuiViewport *viewport = ImGui::GetMainViewport();
+	ImVec2		   pos(viewport->Pos.x, viewport->Pos.y + kTopChromeH);
+	ImVec2		   size(viewport->Size.x, viewport->Size.y - kTopChromeH);
+
+	ImGui::SetNextWindowPos(pos);
+	ImGui::SetNextWindowSize(size);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+	ImGui::Begin("##DockHost", nullptr,
+				 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+					 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+					 ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBringToFrontOnFocus |
+					 ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoSavedSettings);
+	ImGui::DockSpace(dockspace_id, ImVec2(0, 0), ImGuiDockNodeFlags_PassthruCentralNode);
+	ImGui::End();
+	ImGui::PopStyleColor();
+	ImGui::PopStyleVar(3);
 
 	// Apply the default layout once when the saved layout predates the current
 	// version (first run / after an upgrade) or when the user asks to reset it.
@@ -182,6 +209,9 @@ int main(int argc, char *argv[])
 		bapi_engine_quit();
 		return 1;
 	}
+
+	// Custom title bar: remove the OS frame, draw our own (min/max/close).
+	EditorSetupCustomTitleBar(g_editor_window);
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -318,6 +348,7 @@ int main(int argc, char *argv[])
 			if (dx != 0.0f || dy != 0.0f) EditorNudgeSelection(state, dx, dy);
 		}
 
+		EditorDrawTitleBar(state);
 		EditorMenuPanel(state);
 		if (state.show_welcome) {
 			EditorWelcomePanel(state);

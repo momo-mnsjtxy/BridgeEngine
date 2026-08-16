@@ -93,8 +93,7 @@ void EditorRenderEngineView(EditorState &state)
 
 	draw_doc_grid(renderer, state, w, h);
 
-	// Layout first so relative-positioned children (anchored to their parent)
-	// render at their resolved positions instead of raw local offsets.
+	// Layout first so relative-positioned children render at resolved positions.
 	bapi_ui_layout(state.ui);
 
 	bapi_ui_render_ex(state.ui, state.view_offset_x, state.view_offset_y, state.view_scale);
@@ -235,9 +234,8 @@ void EditorViewportPanel(EditorState &state)
 	}
 
 	// ----- click to select / start drag / start marquee -----
-	// Only respond when the mouse is actually over the Viewport window, not just
-	// within its coordinates: a docked/overlapping window (e.g. Documents) on top
-	// must keep its own clicks and drags instead of panning the canvas.
+	// Only respond when the mouse is over the Viewport window, so an overlapping
+	// window (e.g. Documents) keeps its own clicks instead of panning the canvas.
 	bool hovered = mouse_in_viewport(state, mouse) && ImGui::IsWindowHovered();
 	if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !state.dragging &&
 		!state.resizing && !state.marquee_active) {
@@ -350,8 +348,8 @@ void EditorViewportPanel(EditorState &state)
 	}
 
 	// ----- middle mouse pan -----
-	// Must check the mouse is inside the viewport: otherwise a middle-drag on the
-	// Documents panel or any other window would silently pan the canvas.
+	// Must be inside the viewport, otherwise a middle-drag on another window
+	// would silently pan the canvas.
 	if (state.viewport_visible && mouse_in_viewport(state, mouse) &&
 		ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) {
 		ImVec2 delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Middle);

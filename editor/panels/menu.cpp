@@ -424,7 +424,19 @@ void EditorKeyDialog(EditorState &state)
 
 void EditorMenuPanel(EditorState &state)
 {
-	if (ImGui::BeginMainMenuBar()) {
+	// Menu bar sits below the custom title bar (30px).
+	ImGuiViewport *viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + 30.0f));
+	ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, 0.0f));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4, 4));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::Begin("##MainMenuBar", nullptr,
+				 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+					 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+					 ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings |
+					 ImGuiWindowFlags_MenuBar);
+	if (ImGui::BeginMenuBar()) {
 		file_menu(state);
 		edit_menu(state);
 		view_menu(state);
@@ -432,6 +444,8 @@ void EditorMenuPanel(EditorState &state)
 		ImGui::Separator();
 		const char *title = state.filepath.empty() ? "[untitled]" : state.filepath.c_str();
 		ImGui::Text("%s%s", title, state.dirty ? " *" : "");
-		ImGui::EndMainMenuBar();
+		ImGui::EndMenuBar();
 	}
+	ImGui::End();
+	ImGui::PopStyleVar(3);
 }

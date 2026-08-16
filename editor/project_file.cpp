@@ -151,11 +151,8 @@ static std::string relative_to_root(const std::string &root, const std::string &
 	return path;
 }
 
-// ---------------------------------------------------------------------------
 // Per-project sessions: one line per project, "project_path|doc1|doc2|...",
-// where documents are relative to the project root. Written on save, read on
-// open so the previously open documents are restored.
-// ---------------------------------------------------------------------------
+// documents relative to the project root. Written on save, read on open.
 
 static std::string escape_session_entry(const std::string &value)
 {

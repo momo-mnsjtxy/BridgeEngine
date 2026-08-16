@@ -508,11 +508,8 @@ void EditorEndViewDrag(EditorState &state)
 	state.snap_guides_h.clear();
 }
 
-// ---------------------------------------------------------------------------
-// smart snap: while dragging, align the dragged rects' edges and centers to
-// other (non-dragged) components' edges and centers. Mutates dx/dy to the
-// snapped delta and fills the guide-line positions (doc coords).
-// ---------------------------------------------------------------------------
+// smart snap: align dragged rects' edges/centers to other components while
+// dragging. Adjusts the drag delta and records guide-line positions.
 
 static const float kSnapThreshold = 8.0f; // doc units
 

@@ -3,17 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-// ---------------------------------------------------------------------------
-// .uix encrypted UI documents
-//
-// Layout: "BUIX" magic + uint32 LE checksum + uint32 LE payload length + payload.
-// The payload is the plain XML XORed with a keyed byte stream. This is
-// obfuscation to deter casual editing of shipped UI files, not military-grade
-// encryption: the key lives inside the binary that loads the file.
-//
-// The byte-level primitives live here so the editor, the build-time encryptor
-// tool, and the runtime loader all share one implementation.
-// ---------------------------------------------------------------------------
+// .uix format: "BUIX" magic + uint32 LE checksum + uint32 LE length + payload.
+// The payload is plain XML XORed with a keyed stream (obfuscation, not strong
+// encryption). Byte-level primitives are shared by the editor, the build-time
+// encryptor, and the runtime loader.
 
 #define UIX_MAGIC "BUIX"
 #define UIX_MAGIC_LEN 4

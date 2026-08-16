@@ -228,7 +228,7 @@ static plat_window_t sdl3_create_window(const char *title, int width, int height
 {
 	plat_window_t w = malloc(sizeof(struct plat_window));
 	if (!w) return NULL;
-	w->window = SDL_CreateWindow(title, width, height, 0);
+	w->window = SDL_CreateWindow(title, width, height, SDL_WINDOW_RESIZABLE);
 	if (!w->window) {
 		free(w);
 		return NULL;

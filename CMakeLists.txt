@@ -775,6 +775,7 @@ if(BRIDGEENGINE_BUILD_EDITOR AND TARGET bridgeengine_static)
 		editor/panels/context_menu.cpp
 		editor/panels/history.cpp
 		editor/templates.cpp
+		editor/titlebar.cpp
 	)
 	add_executable(bridgeengine_editor ${BRIDGEENGINE_EDITOR_SOURCES})
 	target_include_directories(bridgeengine_editor PRIVATE

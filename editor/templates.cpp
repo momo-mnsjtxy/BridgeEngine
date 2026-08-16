@@ -10,9 +10,9 @@
 #include <io.h>
 #endif
 
-// Template / preset library: save the selected components (roots of the
-// selection) to a UI-XML file, and load templates back by cloning their roots
-// into the current document. Template files live in "<project>/templates/".
+// Template / preset library: save selected components to a UI-XML file and
+// load templates back by cloning their roots into the current document.
+// Template files live in "<project>/templates/".
 
 static const char *kTemplateDir = "templates";
 
@@ -32,11 +32,9 @@ bool EditorSaveTemplate(EditorState &state, const char *filepath)
 {
 	if (!state.ui || !filepath || !filepath[0]) return false;
 
-	// collect the top-level components of the current selection
 	std::vector<bapi_ui_component_t> sources;
 	for (bapi_ui_component_t comp : state.selection_list) {
 		if (!comp) continue;
-		// skip components whose parent is also selected (keep topmost only)
 		bool has_parent = false;
 		for (bapi_ui_component_t p = bapi_ui_component_get_parent(comp); p;
 			 p = bapi_ui_component_get_parent(p)) {
@@ -67,7 +65,6 @@ bool EditorLoadTemplate(EditorState &state, const char *filepath)
 	bapi_ui_t tmp = bapi_ui_load_from_xml(filepath);
 	if (!tmp) return false;
 
-	// Clone every root of the template into the current document.
 	bapi_ui_component_t parent = nullptr;
 	if (state.selection && EditorIsContainerType(bapi_ui_component_get_type(state.selection)))
 		parent = state.selection;
@@ -85,7 +82,6 @@ bool EditorLoadTemplate(EditorState &state, const char *filepath)
 			if (bapi_ui_find(state.ui, new_id) == nullptr) break;
 			suffix++;
 		}
-		// EditorInsertClone clones the (off-tree) template root into the doc.
 		bapi_ui_component_t clone = EditorInsertClone(state, root, parent, new_id);
 		if (clone) created.push_back(clone);
 	}
@@ -102,7 +98,6 @@ std::vector<std::string> EditorListTemplates(const EditorState &state)
 	std::vector<std::string> result;
 	std::string				 dir = EditorTemplateDir(state);
 	std::string				 pattern = dir + "\\*.xml";
-	// Use _findfirst on Windows; non-Windows returns empty (editor is desktop).
 #ifdef _WIN32
 	struct _finddata_t fd;
 	intptr_t		   handle = _findfirst(pattern.c_str(), &fd);

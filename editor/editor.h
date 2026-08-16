@@ -321,6 +321,10 @@ void EditorSetComponentSrc(EditorState &state, bapi_ui_component_t comp, const c
 // panels
 void EditorMenuPanel(EditorState &state);
 void EditorKeyDialog(EditorState &state);
+
+// custom window title bar (editor/titlebar.cpp)
+void EditorSetupCustomTitleBar(SDL_Window *window);
+bool EditorDrawTitleBar(EditorState &state);
 void EditorDocumentsPanel(EditorState &state);
 void EditorToolbarPanel(EditorState &state);
 void EditorViewportPanel(EditorState &state);

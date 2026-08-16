@@ -3,13 +3,9 @@
 // Usage: uix_encrypt <key> <input_dir> <output_dir> [<input_dir2> <output_dir2> ...]
 //
 // Recursively encrypts every *.xml under each input directory into a matching
-// file under the corresponding output directory. The extension is kept (.xml):
-// only the content is encrypted (BUIX magic), so .bep document paths and the
-// runtime loader work unchanged -- bapi_ui_load_from_file detects the magic by
-// content. Non-XML files are copied as-is. Returns 0 on success.
-//
-// This tool links only src/ui_crypt.c, so it can be built without the engine
-// runtime and invoked from the project's CMake POST_BUILD step.
+// file in the output directory. The extension is kept: only the content is
+// encrypted (BUIX magic), so .bep paths and the runtime loader work unchanged.
+// Non-XML files are copied as-is. Returns 0 on success.
 
 #include "BridgeEngine.h"
 #include <errno.h>
